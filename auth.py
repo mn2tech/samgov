@@ -218,10 +218,21 @@ def show_login_page():
         st.markdown("---")
     
     # Check for OAuth callback
-    query_params = st.query_params
-    if 'code' in query_params:
-        # Handle OAuth callback - exchange code for token
-        code = query_params['code']
+    # Handle both old and new Streamlit versions
+    try:
+        # Try new Streamlit API (1.28.0+)
+        if hasattr(st, 'query_params'):
+            query_params = st.query_params
+            code = query_params.get('code', [None])[0] if isinstance(query_params.get('code'), list) else query_params.get('code')
+        else:
+            # Fallback to old API
+            query_params = st.experimental_get_query_params()
+            code = query_params.get('code', [None])[0]
+    except Exception as e:
+        logger.warning(f"Error getting query params: {e}")
+        code = None
+    
+    if code:
         
         with st.spinner("Authenticating with Google..."):
             try:
@@ -245,9 +256,13 @@ def show_login_page():
                         'tenant_name': tenant.name
                     }
                     
-                    # Clear query params
-                    # Note: st.query_params.clear() might not work in all Streamlit versions
-                    # Instead, we'll just rerun which should clear the params
+                    # Clear query params if possible
+                    try:
+                        if hasattr(st, 'query_params') and hasattr(st.query_params, 'clear'):
+                            st.query_params.clear()
+                    except:
+                        pass  # Ignore if clearing doesn't work
+                    
                     st.success(f"✅ Successfully logged in as {user_info['email']}")
                     # Small delay to show success message
                     import time
