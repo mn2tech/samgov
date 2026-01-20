@@ -6,7 +6,7 @@ python-dotenv==1.0.0
 pydantic==2.5.0
 pydantic-settings
 PyPDF2
-pdfplumber==2.1.0
+pdfplumber>=0.11.0
 
 # HTTP & API
 httpx==0.25.1
