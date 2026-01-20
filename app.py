@@ -1017,4 +1017,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        # Catch any unhandled exceptions and display them
+        logger.exception("Unhandled exception in main:")
+        st.error(f"❌ Application Error: {str(e)}")
+        st.exception(e)
+        st.info("""
+        **Troubleshooting Steps:**
+        1. Check that all environment variables are set correctly
+        2. Ensure the database file is writable
+        3. Check the logs for more details
+        4. Try refreshing the page
+        """)
