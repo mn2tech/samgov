@@ -1016,6 +1016,16 @@ def main():
         st.info("💡 Click 'Fetch Opportunities from SAM.gov' to begin searching for contracts.")
 
 
+# Initialize app - catch errors early but don't stop if database fails
+# Database will be initialized lazily when first accessed
+try:
+    # Test database connection early (but don't fail if it doesn't work)
+    _ = db.get_session()
+    logger.info("Database connection successful")
+except Exception as db_error:
+    logger.warning(f"Database initialization warning (will retry on first use): {db_error}")
+    # Don't stop - let it fail gracefully when actually used
+
 if __name__ == "__main__":
     try:
         main()

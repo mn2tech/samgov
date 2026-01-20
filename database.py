@@ -125,14 +125,24 @@ class Database:
     
     def __init__(self):
         try:
+            # Handle SQLite path for Streamlit Cloud
+            db_url = settings.database_url
+            if "sqlite" in db_url and not db_url.startswith("sqlite:///"):
+                # Ensure absolute path for SQLite on Streamlit Cloud
+                import os
+                if db_url.startswith("sqlite:///./"):
+                    # Convert relative path to absolute
+                    db_path = db_url.replace("sqlite:///./", "")
+                    db_url = f"sqlite:///{os.path.abspath(db_path)}"
+            
             self.engine = create_engine(
-                settings.database_url,
-                connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+                db_url,
+                connect_args={"check_same_thread": False} if "sqlite" in db_url else {}
             )
             self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
             # Create all tables if they don't exist
             Base.metadata.create_all(bind=self.engine)
-            logger.info(f"Database initialized: {settings.database_url}")
+            logger.info(f"Database initialized: {db_url}")
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise
@@ -424,15 +434,13 @@ class Database:
             session.close()
 
 
-# Global database instance - use property to initialize lazily
-class DatabaseManager:
-    """Lazy database manager to avoid import-time initialization errors."""
-    _instance = None
-    
-    def __getattr__(self, name):
-        if self._instance is None:
-            self._instance = Database()
-        return getattr(self._instance, name)
-
-# For backward compatibility - this will initialize on first access
-db = DatabaseManager()
+# Global database instance - initialize with error handling
+try:
+    db = Database()
+except Exception as e:
+    logger.error(f"Failed to initialize database: {e}")
+    # Create a dummy object that will fail gracefully
+    class DummyDB:
+        def __getattr__(self, name):
+            raise RuntimeError(f"Database not initialized. Error: {e}")
+    db = DummyDB()
