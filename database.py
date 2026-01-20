@@ -124,13 +124,18 @@ class Database:
     """Database manager for opportunities and profiles."""
     
     def __init__(self):
-        self.engine = create_engine(
-            settings.database_url,
-            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
-        )
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
-        Base.metadata.create_all(bind=self.engine)
-        logger.info(f"Database initialized: {settings.database_url}")
+        try:
+            self.engine = create_engine(
+                settings.database_url,
+                connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+            )
+            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            # Create all tables if they don't exist
+            Base.metadata.create_all(bind=self.engine)
+            logger.info(f"Database initialized: {settings.database_url}")
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            raise
     
     def get_session(self) -> Session:
         """Get database session."""
@@ -419,5 +424,15 @@ class Database:
             session.close()
 
 
-# Global database instance
-db = Database()
+# Global database instance - initialize lazily to handle import-time errors
+_db_instance = None
+
+def get_db():
+    """Get or create database instance."""
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = Database()
+    return _db_instance
+
+# For backward compatibility
+db = get_db()

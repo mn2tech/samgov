@@ -198,8 +198,14 @@ def main():
         return
     
     # Get current user and tenant
-    user = get_current_user()
-    tenant_id = get_current_tenant_id()
+    try:
+        user = get_current_user()
+        tenant_id = get_current_tenant_id()
+    except Exception as e:
+        logger.error(f"Error getting user/tenant: {e}")
+        st.error(f"❌ Error loading user session: {str(e)}")
+        st.info("💡 Please try logging out and logging back in.")
+        return
     
     # Show user info and logout in sidebar
     with st.sidebar:
