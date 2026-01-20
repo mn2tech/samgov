@@ -192,23 +192,30 @@ def show_login_page():
     
     auth = GoogleAuth()
     
+    # Show warning if Google OAuth not configured, but still allow demo mode
     if not auth.client_id:
-        st.error("⚠️ Google OAuth not configured. Please set GOOGLE_CLIENT_ID in .env file.")
-        st.info("""
-        **To set up Google OAuth:**
-        1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-        2. Create a new project or select existing
-        3. Enable Google+ API
-        4. Create OAuth 2.0 credentials
-        5. Add authorized redirect URI: `http://localhost:8501` (or your domain)
-        6. Add to `.env`:
-           ```
-           GOOGLE_CLIENT_ID=your_client_id
-           GOOGLE_CLIENT_SECRET=your_client_secret
-           GOOGLE_REDIRECT_URI=http://localhost:8501
-           ```
-        """)
-        return
+        st.warning("⚠️ Google OAuth not configured. Demo mode is available below.")
+        with st.expander("📖 How to set up Google OAuth (optional)"):
+            st.info("""
+            **To set up Google OAuth:**
+            1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+            2. Create a new project or select existing
+            3. Enable Google+ API or People API
+            4. Create OAuth 2.0 credentials
+            5. Add authorized redirect URI: `http://localhost:8501` (or your Streamlit Cloud URL)
+            6. Add to `.env` or Streamlit Cloud secrets:
+               ```
+               GOOGLE_CLIENT_ID=your_client_id
+               GOOGLE_CLIENT_SECRET=your_client_secret
+               GOOGLE_REDIRECT_URI=http://localhost:8501
+               ```
+            
+            **For Streamlit Cloud:**
+            - Add these as environment variables in your app settings
+            - Use your Streamlit Cloud URL as the redirect URI (e.g., `https://your-app.streamlit.app`)
+            - Add the same URL to authorized redirect URIs in Google Console
+            """)
+        st.markdown("---")
     
     # Check for OAuth callback
     query_params = st.query_params
@@ -255,24 +262,31 @@ def show_login_page():
                 st.info("💡 You can use Demo Mode below to continue testing.")
         return
     
-    # Show login button
+    # Show login button (only if Google OAuth is configured)
+    if auth.client_id:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### Sign in with Google")
+            
+            # Generate login URL
+            login_url = auth.get_login_url()
+            
+            if login_url:
+                st.markdown(f"""
+                <a href="{login_url}" target="_self">
+                    <img src="https://developers.google.com/identity/images/btn_google_signin_dark_normal_web.png" alt="Sign in with Google">
+                </a>
+                """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            st.markdown("**Or use demo mode:**")
+    else:
+        st.markdown("### Demo Mode Login")
+        st.info("💡 Enter your email below to access the app in demo mode.")
+    
+    # Demo mode (always available)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.markdown("### Sign in with Google")
-        
-        # Generate login URL
-        login_url = auth.get_login_url()
-        
-        if login_url:
-            st.markdown(f"""
-            <a href="{login_url}" target="_self">
-                <img src="https://developers.google.com/identity/images/btn_google_signin_dark_normal_web.png" alt="Sign in with Google">
-            </a>
-            """, unsafe_allow_html=True)
-        
-        # Alternative: Manual email input for development
-        st.markdown("---")
-        st.markdown("**Or use demo mode (development only):**")
         
         demo_email = st.text_input("Email (for demo)", placeholder="user@example.com")
         if st.button("Login (Demo)", type="primary"):
