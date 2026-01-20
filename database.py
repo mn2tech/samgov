@@ -424,15 +424,15 @@ class Database:
             session.close()
 
 
-# Global database instance - initialize lazily to handle import-time errors
-_db_instance = None
+# Global database instance - use property to initialize lazily
+class DatabaseManager:
+    """Lazy database manager to avoid import-time initialization errors."""
+    _instance = None
+    
+    def __getattr__(self, name):
+        if self._instance is None:
+            self._instance = Database()
+        return getattr(self._instance, name)
 
-def get_db():
-    """Get or create database instance."""
-    global _db_instance
-    if _db_instance is None:
-        _db_instance = Database()
-    return _db_instance
-
-# For backward compatibility
-db = get_db()
+# For backward compatibility - this will initialize on first access
+db = DatabaseManager()
