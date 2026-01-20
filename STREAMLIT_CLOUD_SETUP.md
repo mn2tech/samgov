@@ -9,10 +9,10 @@ Go to your Streamlit Cloud app settings and add these environment variables:
 ```
 GOOGLE_CLIENT_ID=your_client_id_here.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_client_secret_here
-GOOGLE_REDIRECT_URI=https://your-app-name.streamlit.app
+GOOGLE_REDIRECT_URI=https://itgovcon.streamlit.app
 ```
 
-**Important**: Replace `your-app-name` with your actual Streamlit Cloud app name.
+**Important**: Use your exact Streamlit Cloud URL (e.g., `https://itgovcon.streamlit.app`)
 
 ### 2. Google Cloud Console Configuration
 
@@ -21,8 +21,9 @@ GOOGLE_REDIRECT_URI=https://your-app-name.streamlit.app
 3. Go to **APIs & Services** → **Credentials**
 4. Click on your OAuth 2.0 Client ID
 5. Under **Authorized redirect URIs**, add:
-   - `https://your-app-name.streamlit.app` (your Streamlit Cloud URL)
+   - `https://itgovcon.streamlit.app` (your exact Streamlit Cloud URL)
    - Make sure it matches exactly (including `https://` and no trailing slash)
+   - **Do NOT add a trailing slash** (e.g., use `https://itgovcon.streamlit.app` not `https://itgovcon.streamlit.app/`)
 
 ### 3. Other Environment Variables (Optional but Recommended)
 
