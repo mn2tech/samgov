@@ -26,7 +26,8 @@ class ProfileManager:
         preferred_agencies: list = None,
         certifications: list = None,
         offices: list = None,
-        role_preference: str = "Prime"
+        role_preference: str = "Prime",
+        tenant_id: Optional[int] = None
     ) -> CapabilityProfile:
         """
         Create a new capability profile.
@@ -55,24 +56,24 @@ class ProfileManager:
             role_preference=role_preference
         )
         
-        # Save to database
-        self.db.save_profile(profile)
-        logger.info(f"Created profile for {company_name}")
+        # Save to database with tenant_id
+        self.db.save_profile(profile, tenant_id=tenant_id)
+        logger.info(f"Created profile for {company_name} (tenant: {tenant_id})")
         
         return profile
     
-    def get_profile(self, company_name: str) -> Optional[CapabilityProfile]:
-        """Get capability profile by company name."""
-        return self.db.get_profile(company_name)
+    def get_profile(self, company_name: str, tenant_id: Optional[int] = None) -> Optional[CapabilityProfile]:
+        """Get capability profile by company name for a tenant."""
+        return self.db.get_profile(company_name, tenant_id=tenant_id)
     
-    def list_all_profiles(self) -> List[str]:
-        """Get list of all saved company profile names."""
-        return self.db.list_all_profiles()
+    def list_all_profiles(self, tenant_id: Optional[int] = None) -> List[str]:
+        """Get list of all saved company profile names for a tenant."""
+        return self.db.list_all_profiles(tenant_id=tenant_id)
     
-    def update_profile(self, profile: CapabilityProfile) -> CapabilityProfile:
-        """Update existing capability profile."""
-        self.db.save_profile(profile)
-        logger.info(f"Updated profile for {profile.company_name}")
+    def update_profile(self, profile: CapabilityProfile, tenant_id: Optional[int] = None) -> CapabilityProfile:
+        """Update existing capability profile for a tenant."""
+        self.db.save_profile(profile, tenant_id=tenant_id)
+        logger.info(f"Updated profile for {profile.company_name} (tenant: {tenant_id})")
         return profile
     
     def get_default_profile(self) -> CapabilityProfile:

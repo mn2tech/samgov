@@ -19,6 +19,7 @@ from ai_bid_assistant import bid_assistant
 from profile_manager import profile_manager, ProfileManager
 from models import Opportunity, CapabilityProfile, OpportunityScore, RecommendedAction
 from database import db
+from auth import check_authentication, get_current_user, get_current_tenant_id, show_login_page, logout
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, settings.log_level))
@@ -33,6 +34,10 @@ st.set_page_config(
 )
 
 # Initialize session state
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user" not in st.session_state:
+    st.session_state.user = None
 if "opportunities" not in st.session_state:
     st.session_state.opportunities = []
 if "scores" not in st.session_state:
@@ -177,15 +182,35 @@ def score_opportunities(
     with st.spinner("Scoring opportunities with AI..."):
         scores = scorer.score_batch(opportunities, profile)
     
-    # Save scores to database
+    # Save scores to database with tenant_id
+    tenant_id = get_current_tenant_id()
     for score in scores:
-        db.save_score(score)
+        db.save_score(score, tenant_id=tenant_id)
     
     return scores
 
 
 def main():
     """Main application."""
+    # Check authentication
+    if not check_authentication():
+        show_login_page()
+        return
+    
+    # Get current user and tenant
+    user = get_current_user()
+    tenant_id = get_current_tenant_id()
+    
+    # Show user info and logout in sidebar
+    with st.sidebar:
+        if user:
+            st.markdown(f"**👤 {user.get('name', user.get('email'))}**")
+            st.markdown(f"**🏢 {user.get('tenant_name', 'Organization')}**")
+            if st.button("🚪 Logout", key="logout_btn"):
+                logout()
+                return
+        st.markdown("---")
+    
     st.title("🏛️ AI-Powered IT Contract Finder")
     st.markdown("**Find and score federal IT, AI, Data, Cloud, and Cyber opportunities from SAM.gov**")
     
@@ -195,8 +220,18 @@ def main():
     with st.sidebar:
         st.header("📋 Company Capability Profile")
         
-        # Get list of saved profiles
-        saved_profiles = profile_manager.list_all_profiles()
+        # Get list of saved profiles for current tenant only
+        saved_profiles = profile_manager.list_all_profiles(tenant_id=tenant_id)
+        
+        # New user onboarding - show welcome message if no profiles
+        if not saved_profiles:
+            st.info("👋 **Welcome!** Create your first company profile to get started.")
+            st.markdown("""
+            **Get started in 3 steps:**
+            1. Enter your company name below
+            2. Select your core capabilities
+            3. Add technical skills and NAICS codes
+            """)
         
         # Profile selection: dropdown or new profile
         if saved_profiles:
@@ -220,8 +255,8 @@ def main():
                     help="Enter a new company name to create a profile"
                 )
                 if profile_name:
-                    # Check if profile already exists
-                    existing = profile_manager.get_profile(profile_name)
+                    # Check if profile already exists for this tenant
+                    existing = profile_manager.get_profile(profile_name, tenant_id=tenant_id)
                     if existing:
                         st.warning(f"Profile '{profile_name}' already exists. Select it from dropdown or use a different name.")
                         profile_name = None
@@ -229,23 +264,30 @@ def main():
                 profile_name = selected_option
                 # Auto-load selected profile
                 if not st.session_state.profile or st.session_state.profile.company_name != profile_name:
-                    profile = profile_manager.get_profile(profile_name)
+                    profile = profile_manager.get_profile(profile_name, tenant_id=tenant_id)
                     if profile:
                         st.session_state.profile = profile
                         st.success(f"✅ Loaded: {profile_name}")
         else:
-            # No saved profiles yet - show text input for new profile
+            # No saved profiles yet - show prominent onboarding for new users
+            st.markdown("### 🚀 Create Your First Company Profile")
+            st.markdown("Enter your company name to start matching opportunities:")
+            
             profile_name = st.text_input(
                 "Company Name",
                 value="",
                 key="profile_name",
-                help="Enter company name to create your first profile"
+                help="Enter your company name (e.g., 'NM2TECH LLC', 'Acme Corp')",
+                placeholder="e.g., NM2TECH LLC"
             )
+            
+            if profile_name:
+                st.info(f"💡 Next: Fill in the profile details below for **{profile_name}**")
         
         # Manual load button (for edge cases)
         if saved_profiles and profile_name and profile_name != "-- Create New Profile --":
             if st.button("🔄 Reload Profile", key="reload_profile"):
-                profile = profile_manager.get_profile(profile_name)
+                profile = profile_manager.get_profile(profile_name, tenant_id=tenant_id)
                 if profile:
                     st.session_state.profile = profile
                     st.success(f"Reloaded profile for {profile_name}")
@@ -266,8 +308,30 @@ def main():
             if 'profile_name' in st.session_state and st.session_state.profile_name:
                 profile_name_for_form = st.session_state.profile_name
         
-        if profile_name_for_form:
-            with st.expander("Create/Edit Profile", expanded=not st.session_state.profile):
+        # Show profile creation form
+        # For new users (no profiles), always show expanded
+        # For existing users, show expanded only if no profile is loaded
+        should_expand = not st.session_state.profile
+        if not saved_profiles:
+            should_expand = True  # Always expand for new users
+        
+        # Show profile form for new users or when profile name is entered
+        if profile_name_for_form or (not saved_profiles and not st.session_state.profile):
+            expander_title = "🚀 Create Your Company Profile" if not saved_profiles else "Create/Edit Profile"
+            with st.expander(expander_title, expanded=should_expand):
+                # For new users without a profile name, show company name input first
+                if not saved_profiles and not profile_name_for_form:
+                    profile_name_input = st.text_input(
+                        "Company Name *",
+                        value="",
+                        key="new_user_company_name",
+                        help="Enter your company name to create a profile",
+                        placeholder="e.g., NM2TECH LLC"
+                    )
+                    if not profile_name_input:
+                        st.stop()  # Don't show rest of form until company name is entered
+                    profile_name_for_form = profile_name_input
+                
                 # Pre-fill from loaded profile if available
                 current_profile = st.session_state.profile
                 default_domains = current_profile.core_domains if current_profile else ["AI/ML", "Data Analytics/Engineering", "Cloud Architecture & Migration", 
@@ -379,8 +443,27 @@ def main():
     
     # Main content area
     if not st.session_state.profile:
-        st.warning("⚠️ Please create or load a capability profile in the sidebar to begin.")
-        st.info("💡 Use the 'Create/Edit Profile' section in the sidebar to set up your company profile.")
+        # Enhanced onboarding for new users
+        if not saved_profiles:
+            st.info("""
+            ## 👋 Welcome to AI Contract Finder!
+            
+            **Get started by creating your company profile:**
+            1. **Enter your company name** in the sidebar
+            2. **Select your core capabilities** (AI/ML, Data, Cloud, etc.)
+            3. **Add technical skills** (Python, AWS, etc.)
+            4. **Add NAICS codes** (541511, 541512, etc.)
+            5. **Click "Save Profile"**
+            
+            Once your profile is created, you can:
+            - Fetch opportunities from SAM.gov
+            - Get AI-powered fit scores
+            - Receive BID/TEAM/IGNORE recommendations
+            - Use AI Bid Assistant for proposal help
+            """)
+        else:
+            st.warning("⚠️ Please create or load a capability profile in the sidebar to begin.")
+            st.info("💡 Use the 'Create/Edit Profile' section in the sidebar to set up your company profile.")
         return
     
     # Search and Filter Panel

@@ -4,10 +4,10 @@ Uses SQLAlchemy for ORM and supports SQLite/Postgres.
 """
 import logging
 from datetime import datetime
-from typing import List, Optional
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, Text, JSON
+from typing import List, Optional, Dict
+from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, Text, JSON, ForeignKey, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, relationship
 
 from config import settings
 from models import Opportunity, OpportunityScore, CapabilityProfile
@@ -55,6 +55,7 @@ class OpportunityScoreDB(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     notice_id = Column(String, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)  # Multi-tenant support
     company_name = Column(String, index=True)
     fit_score = Column(Float, index=True)
     
@@ -76,17 +77,47 @@ class OpportunityScoreDB(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class TenantDB(Base):
+    """Database model for tenants (companies/organizations)."""
+    __tablename__ = "tenants"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True, index=True)
+    domain = Column(String)  # Email domain for auto-tenant assignment
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class UserDB(Base):
+    """Database model for users."""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    name = Column(String)
+    google_id = Column(String, unique=True, index=True)  # Google user ID (sub)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime)
+
+
 class CapabilityProfileDB(Base):
     """Database model for capability profiles."""
     __tablename__ = "capability_profiles"
     
     id = Column(Integer, primary_key=True, index=True)
-    company_name = Column(String, unique=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), index=True)  # Multi-tenant support
+    company_name = Column(String, index=True)  # No longer unique globally, unique per tenant
     profile_data = Column(JSON)  # Store full profile as JSON
     
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Unique constraint per tenant
+    __table_args__ = (UniqueConstraint('tenant_id', 'company_name', name='_tenant_company_uc'),)
 
 
 class Database:
@@ -208,12 +239,13 @@ class Database:
         finally:
             session.close()
     
-    def save_score(self, score: OpportunityScore) -> OpportunityScoreDB:
+    def save_score(self, score: OpportunityScore, tenant_id: Optional[int] = None) -> OpportunityScoreDB:
         """Save opportunity score."""
         session = self.get_session()
         try:
             db_score = OpportunityScoreDB(
                 notice_id=score.opportunity.notice_id,
+                tenant_id=tenant_id,
                 company_name=score.capability_profile.company_name,
                 fit_score=score.fit_score,
                 domain_match=score.breakdown.domain_match,
@@ -239,21 +271,34 @@ class Database:
         finally:
             session.close()
     
-    def save_profile(self, profile: CapabilityProfile) -> CapabilityProfileDB:
-        """Save or update capability profile."""
+    def save_profile(self, profile: CapabilityProfile, tenant_id: Optional[int] = None) -> CapabilityProfileDB:
+        """Save or update capability profile for a tenant."""
         session = self.get_session()
         try:
-            db_profile = session.query(CapabilityProfileDB).filter(
+            # Query by company_name AND tenant_id to ensure tenant isolation
+            query = session.query(CapabilityProfileDB).filter(
                 CapabilityProfileDB.company_name == profile.company_name
-            ).first()
+            )
+            
+            if tenant_id is not None:
+                query = query.filter(CapabilityProfileDB.tenant_id == tenant_id)
+            
+            db_profile = query.first()
             
             if db_profile:
+                # Update existing profile
                 db_profile.profile_data = profile.dict()
+                if tenant_id is not None:
+                    db_profile.tenant_id = tenant_id
                 db_profile.updated_at = datetime.utcnow()
             else:
+                # Create new profile
+                if tenant_id is None:
+                    raise ValueError("tenant_id is required when creating a new profile")
                 db_profile = CapabilityProfileDB(
                     company_name=profile.company_name,
-                    profile_data=profile.dict()
+                    profile_data=profile.dict(),
+                    tenant_id=tenant_id
                 )
                 session.add(db_profile)
             
@@ -268,13 +313,17 @@ class Database:
         finally:
             session.close()
     
-    def get_profile(self, company_name: str) -> Optional[CapabilityProfile]:
-        """Get capability profile by company name."""
+    def get_profile(self, company_name: str, tenant_id: Optional[int] = None) -> Optional[CapabilityProfile]:
+        """Get capability profile by company name for a tenant."""
         session = self.get_session()
         try:
-            db_profile = session.query(CapabilityProfileDB).filter(
+            query = session.query(CapabilityProfileDB).filter(
                 CapabilityProfileDB.company_name == company_name
-            ).first()
+            )
+            if tenant_id:
+                query = query.filter(CapabilityProfileDB.tenant_id == tenant_id)
+            
+            db_profile = query.first()
             
             if db_profile:
                 profile_data = db_profile.profile_data.copy()
@@ -287,12 +336,85 @@ class Database:
         finally:
             session.close()
     
-    def list_all_profiles(self) -> List[str]:
-        """Get list of all saved company profile names."""
+    def list_all_profiles(self, tenant_id: Optional[int] = None) -> List[str]:
+        """Get list of all saved company profile names for a tenant."""
         session = self.get_session()
         try:
-            profiles = session.query(CapabilityProfileDB.company_name).all()
+            query = session.query(CapabilityProfileDB.company_name)
+            if tenant_id:
+                query = query.filter(CapabilityProfileDB.tenant_id == tenant_id)
+            profiles = query.all()
             return [name[0] for name in profiles] if profiles else []
+        finally:
+            session.close()
+    
+    def get_or_create_tenant_by_email(self, email: str):
+        """Get or create tenant based on email domain."""
+        session = self.get_session()
+        try:
+            domain = email.split('@')[1] if '@' in email else 'default'
+            
+            # Try to find tenant by domain
+            tenant = session.query(TenantDB).filter(TenantDB.domain == domain).first()
+            
+            if not tenant:
+                # Create new tenant
+                tenant = TenantDB(
+                    name=domain.split('.')[0].title() + " Organization",
+                    domain=domain
+                )
+                session.add(tenant)
+                session.commit()
+                session.refresh(tenant)
+                logger.info(f"Created new tenant: {tenant.name} (domain: {domain})")
+            
+            return tenant
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error getting/creating tenant: {e}")
+            raise
+        finally:
+            session.close()
+    
+    def get_or_create_user(self, user_info: Dict, tenant_id: int):
+        """Get or create user from Google auth info."""
+        session = self.get_session()
+        try:
+            google_id = user_info.get('sub')
+            email = user_info.get('email')
+            
+            # Try to find existing user
+            user = session.query(UserDB).filter(
+                (UserDB.google_id == google_id) | (UserDB.email == email)
+            ).first()
+            
+            if user:
+                # Update last login
+                user.last_login = datetime.utcnow()
+                # Update tenant if changed
+                if user.tenant_id != tenant_id:
+                    user.tenant_id = tenant_id
+                session.commit()
+                session.refresh(user)
+            else:
+                # Create new user
+                user = UserDB(
+                    email=email,
+                    name=user_info.get('name', email.split('@')[0]),
+                    google_id=google_id,
+                    tenant_id=tenant_id,
+                    last_login=datetime.utcnow()
+                )
+                session.add(user)
+                session.commit()
+                session.refresh(user)
+                logger.info(f"Created new user: {email}")
+            
+            return user
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error getting/creating user: {e}")
+            raise
         finally:
             session.close()
 

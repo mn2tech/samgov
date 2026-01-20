@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, env="DEBUG")
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     
+    # Google OAuth (for authentication)
+    google_client_id: Optional[str] = Field(default=None, env="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, env="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: Optional[str] = Field(default=None, env="GOOGLE_REDIRECT_URI")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

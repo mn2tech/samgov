@@ -2,7 +2,7 @@
 FastAPI backend for AI Contract Finder.
 Optional REST API for programmatic access and future multi-tenant SaaS.
 """
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 import asyncio
@@ -223,10 +223,17 @@ async def get_opportunities(
 
 
 @app.post("/profiles", response_model=CapabilityProfile)
-async def create_profile(profile: CapabilityProfile):
-    """Create or update a capability profile."""
+async def create_profile(
+    profile: CapabilityProfile,
+    tenant_id: Optional[int] = Query(None, description="Tenant ID for multi-tenant support")
+):
+    """
+    Create or update a capability profile.
+    
+    Note: For multi-tenant support, tenant_id should be provided as a query parameter.
+    """
     try:
-        db.save_profile(profile)
+        db.save_profile(profile, tenant_id=tenant_id)
         return profile
     except Exception as e:
         logger.error(f"Error creating profile: {e}")

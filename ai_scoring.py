@@ -88,9 +88,21 @@ class AIScoringEngine:
             else:
                 recommended_action = RecommendedAction.IGNORE
             
+            # Convert profile to dict for Pydantic v2 compatibility
+            # Pydantic v2 requires nested models to be passed as dicts or properly validated instances
+            if isinstance(profile, CapabilityProfile):
+                try:
+                    # Try using model_dump (Pydantic v2)
+                    profile_dict = profile.model_dump()
+                except AttributeError:
+                    # Fallback to dict() for Pydantic v1
+                    profile_dict = profile.dict()
+            else:
+                profile_dict = profile
+            
             return OpportunityScore(
                 opportunity=opportunity,
-                capability_profile=profile,
+                capability_profile=profile_dict,  # Pass as dict - Pydantic will validate it
                 fit_score=round(fit_score, 2),
                 breakdown=breakdown,
                 explanation=score_data["explanation"],
@@ -285,9 +297,21 @@ Return ONLY the JSON object, no other text."""
         
         explanation = f"Domain match: {domain_match:.0f}%, NAICS: {naics_match:.0f}%, Skills: {technical_skill_match:.0f}%"
         
+        # Convert profile to dict for Pydantic v2 compatibility
+        # Pydantic v2 requires nested models to be passed as dicts or properly validated instances
+        if isinstance(profile, CapabilityProfile):
+            try:
+                # Try using model_dump (Pydantic v2)
+                profile_dict = profile.model_dump()
+            except AttributeError:
+                # Fallback to dict() for Pydantic v1
+                profile_dict = profile.dict()
+        else:
+            profile_dict = profile
+        
         return OpportunityScore(
             opportunity=opportunity,
-            capability_profile=profile,
+            capability_profile=profile_dict,  # Pass as dict - Pydantic will validate it
             fit_score=round(fit_score, 2),
             breakdown=breakdown,
             explanation=explanation,
