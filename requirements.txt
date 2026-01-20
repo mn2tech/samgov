@@ -18,8 +18,8 @@ sqlalchemy>=2.0.0
 
 # AI/ML
 openai>=1.3.5
-# tiktoken is optional - only needed for token counting, use newer version with pre-built wheels
-tiktoken>=0.8.0
+# tiktoken is optional - not used in codebase, but OpenAI SDK may use it
+# tiktoken>=0.8.0  # Uncomment if needed
 
 # Data Processing
 pandas>=2.2.0  # Use newer version with pre-built wheels
