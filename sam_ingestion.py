@@ -291,18 +291,24 @@ class SAMIngestion:
                         # If it has IT NAICS codes, include it (less strict filtering)
                         it_opportunities.append(opp)
                     # Also check if title/description contains IT keywords (even without IT NAICS)
-                    else:
+                    elif opp.get("title") or opp.get("description"):
                         title_desc = f"{opp.get('title', '')} {opp.get('description', '')}".lower()
                         it_keywords = [
                             "software", "information technology", "IT", "computer", "system", "data",
                             "artificial intelligence", "AI", "machine learning", "cloud", "cybersecurity",
                             "network", "application", "platform", "database", "analytics", "digital",
                             "automation", "devops", "infrastructure", "enterprise", "solution",
-                            "programming", "development", "engineering", "technical", "technology"
+                            "programming", "development", "engineering", "technical", "technology",
+                            "web", "mobile", "api", "integration", "support", "maintenance", "services"
                         ]
                         # If it has strong IT keywords, include it
                         if any(kw in title_desc for kw in it_keywords):
                             it_opportunities.append(opp)
+                    # If no NAICS and no clear IT keywords, but it came from IT-focused search, include it anyway
+                    # (might be a valid IT opportunity with unclear description)
+                    elif not opp_naics:
+                        # Include opportunities without NAICS if they came from our IT-focused search
+                        it_opportunities.append(opp)
             
             if it_opportunities:
                 logger.info(f"Filtered to {len(it_opportunities)} IT opportunities from {len(opportunities)} total")
