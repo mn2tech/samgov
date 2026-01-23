@@ -654,14 +654,14 @@ def main():
             progress_bar.empty()
             status_text.empty()
             # Filter out description endpoint errors (they're expected and handled)
-                error_msg = str(e)
-                if "API_KEY_INVALID" not in error_msg and "noticedesc" not in error_msg.lower():
-                    st.error(f"Error fetching opportunities: {e}")
-                    logger.error(f"Error: {e}")
-                else:
-                    # Description endpoint errors are expected - just log, don't show to user
-                    logger.debug(f"Description endpoint error (expected): {e}")
-                    # Still show success if we got opportunities
+            error_msg = str(e)
+            if "API_KEY_INVALID" not in error_msg and "noticedesc" not in error_msg.lower():
+                st.error(f"Error fetching opportunities: {e}")
+                logger.error(f"Error: {e}")
+            else:
+                # Description endpoint errors are expected - just log, don't show to user
+                logger.debug(f"Description endpoint error (expected): {e}")
+                # Still show success if we got opportunities
                     if st.session_state.opportunities:
                         st.success(f"✅ Fetched {len(st.session_state.opportunities)} opportunities (some descriptions may be unavailable)")
     
