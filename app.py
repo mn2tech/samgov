@@ -149,31 +149,44 @@ async def fetch_and_classify_opportunities(
     naics: Optional[List[str]] = None,
     keywords: Optional[List[str]] = None,
     status_text=None,
-    progress_bar=None
+    progress_bar=None,
+    quick_test: bool = False
 ) -> List[Opportunity]:
     """Fetch and classify opportunities."""
     ingestion = st.session_state.ingestion
     classifier = st.session_state.classifier
     
-    # Fetch opportunities (reduced limit to avoid timeouts)
+    # Quick test mode: limit to 20 opportunities and use rule-based only
+    limit = 20 if quick_test else 100
+    
+    # Fetch opportunities
     opportunities = await ingestion.get_opportunities(
         days_ahead=days_ahead,
         naics=naics,
         keywords=keywords,
-        limit=100  # Balanced limit to get opportunities without timeout
+        limit=limit
     )
+    
+    # Limit to 20 for quick test mode
+    if quick_test and len(opportunities) > 20:
+        opportunities = opportunities[:20]
     
     # Classify opportunities with progress tracking
     if opportunities:
         if status_text:
-            status_text.text(f"Step 2/3: Classifying {len(opportunities)} opportunities...")
+            if quick_test:
+                status_text.text(f"⚡ Quick Test: Classifying {len(opportunities)} opportunities (rule-based only)...")
+            else:
+                status_text.text(f"Step 2/3: Classifying {len(opportunities)} opportunities...")
         if progress_bar:
             progress_bar.progress(40)
         
-        # Use rule-based classification if no OpenAI key (much faster)
-        if not settings.openai_api_key:
+        # Quick test mode: always use rule-based (fast, no AI)
+        if quick_test or not settings.openai_api_key:
             # Fast rule-based classification
             opportunities = classifier.classify_batch(opportunities)
+            if progress_bar:
+                progress_bar.progress(80)
         else:
             # AI classification with progress - limit to first 50 for speed
             # Rest will use rule-based classification
@@ -651,13 +664,26 @@ def main():
             help="Select an agency to filter opportunities" if unique_agencies else "No agencies available. Fetch opportunities first."
         )
     
+    # Quick Test Mode option
+    col_fetch1, col_fetch2 = st.columns([3, 1])
+    with col_fetch1:
+        quick_test_mode = st.checkbox(
+            "⚡ Quick Test Mode (Fast - No AI, Limited Results)",
+            value=False,
+            key="quick_test_mode",
+            help="Use rule-based classification only. Faster but less accurate. Limits to 20 opportunities."
+        )
+    
     # Fetch opportunities button
     if st.button("🔍 Fetch Opportunities from SAM.gov", type="primary"):
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         try:
-            status_text.text("Step 1/3: Fetching opportunities from SAM.gov...")
+            if quick_test_mode:
+                status_text.text("⚡ Quick Test Mode: Fetching sample opportunities...")
+            else:
+                status_text.text("Step 1/3: Fetching opportunities from SAM.gov...")
             progress_bar.progress(20)
             
             # Add timeout wrapper
@@ -669,7 +695,8 @@ def main():
                     fetch_and_classify_opportunities(
                         days_ahead=days_ahead,
                         status_text=status_text,
-                        progress_bar=progress_bar
+                        progress_bar=progress_bar,
+                        quick_test=quick_test_mode
                     ),
                     timeout=120.0  # 2 minute timeout
                 )
