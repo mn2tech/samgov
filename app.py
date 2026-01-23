@@ -171,16 +171,29 @@ async def fetch_and_classify_opportunities(
             # Fast rule-based classification
             opportunities = classifier.classify_batch(opportunities)
         else:
-            # AI classification with progress
+            # AI classification with progress - limit to first 50 for speed
+            # Rest will use rule-based classification
+            max_ai_classify = 50
             classified = []
             total = len(opportunities)
+            
             for i, opp in enumerate(opportunities):
-                classified.append(classifier.classify_opportunity(opp))
-                # Update progress every 10 opportunities
-                if (i + 1) % 10 == 0 or (i + 1) == total:
-                    progress = 40 + int((i + 1) / total * 40)  # 40-80% for classification
-                    progress_bar.progress(progress)
-                    status_text.text(f"Step 2/3: Classifying {i + 1}/{total} opportunities...")
+                if i < max_ai_classify:
+                    # Use AI for first batch
+                    classified.append(classifier.classify_opportunity(opp))
+                    # Update progress every 5 opportunities
+                    if (i + 1) % 5 == 0 or (i + 1) == max_ai_classify:
+                        progress = 40 + int((i + 1) / max_ai_classify * 35)  # 40-75% for AI classification
+                        progress_bar.progress(progress)
+                        status_text.text(f"Step 2/3: AI classifying {i + 1}/{min(max_ai_classify, total)} opportunities...")
+                else:
+                    # Use fast rule-based for the rest
+                    classified.append(classifier._rule_based_classify(opp))
+                    if (i + 1) % 20 == 0 or (i + 1) == total:
+                        progress = 75 + int((i + 1 - max_ai_classify) / (total - max_ai_classify) * 10) if total > max_ai_classify else 85
+                        progress_bar.progress(progress)
+                        status_text.text(f"Step 2/3: Processing {i + 1}/{total} opportunities...")
+            
             opportunities = classified
     
     # Save to database
