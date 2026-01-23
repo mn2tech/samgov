@@ -69,6 +69,12 @@ class AIScoringEngine:
         try:
             score_data = self._ai_score(opportunity, profile)
             
+            # Ensure breakdown exists
+            if "breakdown" not in score_data or not score_data["breakdown"]:
+                # Fallback to rule-based if AI didn't return breakdown
+                logger.warning(f"AI didn't return breakdown for {opportunity.notice_id}, using rule-based")
+                return self._rule_based_score(opportunity, profile)
+            
             # Calculate weighted fit score
             breakdown = FitScoreBreakdown(**score_data["breakdown"])
             fit_score = (
@@ -197,9 +203,21 @@ Return ONLY the JSON object, no other text."""
             
             score_data = json.loads(content)
             
+            # Ensure all required keys exist with defaults
+            if "breakdown" not in score_data:
+                score_data["breakdown"] = {}
+            if "explanation" not in score_data:
+                score_data["explanation"] = "AI classification completed"
+            if "reasoning" not in score_data:
+                score_data["reasoning"] = score_data["explanation"]
+            if "risk_factors" not in score_data:
+                score_data["risk_factors"] = []
+            
             # Validate scores are in 0-100 range
-            for key, value in score_data["breakdown"].items():
-                score_data["breakdown"][key] = max(0, min(100, float(value)))
+            breakdown = score_data.get("breakdown", {})
+            for key, value in breakdown.items():
+                breakdown[key] = max(0, min(100, float(value)))
+            score_data["breakdown"] = breakdown
             
             return score_data
             
