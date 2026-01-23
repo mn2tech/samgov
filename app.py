@@ -300,6 +300,110 @@ def main():
                 else:
                     st.warning(f"No profile found for {profile_name}.")
         
+        # Quick create comprehensive IT profile
+        st.markdown("---")
+        with st.expander("🚀 Quick Start: Create Sample IT Profile", expanded=False):
+            st.markdown("""
+            **Create a comprehensive IT profile** optimized to match the majority of IT contracts:
+            - 129 technical skills
+            - 13 NAICS codes  
+            - 34 federal agencies
+            - Contract range: $100K - $50M
+            """)
+            if st.button("✨ Create Comprehensive IT Profile", key="create_comprehensive_profile"):
+                try:
+                    # Check if it already exists
+                    existing = profile_manager.get_profile("Comprehensive IT Solutions LLC", tenant_id=tenant_id)
+                    if existing:
+                        st.warning("Profile 'Comprehensive IT Solutions LLC' already exists. Select it from the dropdown above.")
+                    else:
+                        # Create comprehensive profile
+                        profile = profile_manager.create_profile(
+                            company_name="Comprehensive IT Solutions LLC",
+                            core_domains=[
+                                "AI/ML", "Data Analytics/Engineering", "Cloud Architecture & Migration",
+                                "DevSecOps/Automation", "Cybersecurity/Zero Trust", "IT Modernization",
+                                "Software Engineering", "IT Operations"
+                            ],
+                            technical_skills=[
+                                "Python", "Java", "JavaScript", "TypeScript", "C#", "C++", "Go", "Rust",
+                                "Ruby", "PHP", "Swift", "Kotlin", "Scala", "R", "MATLAB",
+                                "AWS", "Azure", "GCP", "Cloud Computing", "Multi-Cloud", "Hybrid Cloud",
+                                "AWS Lambda", "Azure Functions", "Google Cloud Functions",
+                                "EC2", "S3", "RDS", "DynamoDB", "Azure Blob", "Cloud Storage",
+                                "Kubernetes", "Docker", "Container Orchestration", "K8s", "OpenShift",
+                                "Docker Swarm", "Mesos", "Nomad",
+                                "Terraform", "CloudFormation", "Ansible", "Puppet", "Chef",
+                                "Infrastructure Automation", "IaC",
+                                "SQL", "NoSQL", "PostgreSQL", "MySQL", "MongoDB", "Cassandra",
+                                "Redis", "Elasticsearch", "Data Engineering", "ETL", "Data Pipeline",
+                                "Apache Spark", "Hadoop", "Kafka", "Data Warehousing", "Data Lake",
+                                "Machine Learning", "Deep Learning", "LLMs", "AI/ML", "Generative AI",
+                                "TensorFlow", "PyTorch", "scikit-learn", "Hugging Face", "OpenAI API",
+                                "Natural Language Processing", "NLP", "Computer Vision", "RAG",
+                                "DevOps", "CI/CD", "GitLab CI", "Jenkins", "GitHub Actions",
+                                "Azure DevOps", "CircleCI", "Travis CI", "Bamboo",
+                                "Cybersecurity", "Zero Trust", "Security Architecture", "Penetration Testing",
+                                "Vulnerability Assessment", "SIEM", "SOC", "IAM", "PKI", "Encryption",
+                                "FedRAMP", "NIST", "FISMA", "RMF", "ATO",
+                                "Microservices", "API Development", "REST", "GraphQL", "gRPC",
+                                "Web Services", "Service-Oriented Architecture", "SOA",
+                                "Data Analytics", "Business Intelligence", "Tableau", "Power BI",
+                                "Qlik", "Looker", "Data Visualization", "Reporting",
+                                "Agile", "Scrum", "Kanban", "SAFe", "Project Management",
+                                "JIRA", "Confluence", "ServiceNow",
+                                "Mainframe", "COBOL", "Legacy System Migration", "Application Modernization",
+                                "Cloud Migration", "Digital Transformation"
+                            ],
+                            naics=[
+                                "541511", "541512", "541513", "541519",
+                                "518210", "518310",
+                                "541330", "541690", "541611", "541618",
+                                "511210", "541715", "811212"
+                            ],
+                            preferred_agencies=[
+                                "DEPT OF DEFENSE", "DEPT OF HOMELAND SECURITY", "DEPT OF VETERANS AFFAIRS",
+                                "GENERAL SERVICES ADMINISTRATION", "DEPARTMENT OF ENERGY",
+                                "NATIONAL AERONAUTICS AND SPACE ADMINISTRATION",
+                                "DEPARTMENT OF HEALTH AND HUMAN SERVICES", "DEPARTMENT OF TRANSPORTATION",
+                                "DEPARTMENT OF JUSTICE", "DEPARTMENT OF TREASURY", "DEPARTMENT OF COMMERCE",
+                                "DEPARTMENT OF EDUCATION", "DEPARTMENT OF AGRICULTURE",
+                                "ENVIRONMENTAL PROTECTION AGENCY", "SOCIAL SECURITY ADMINISTRATION",
+                                "INTERNAL REVENUE SERVICE", "FEDERAL BUREAU OF INVESTIGATION",
+                                "CENTRAL INTELLIGENCE AGENCY", "NATIONAL SECURITY AGENCY",
+                                "DEPARTMENT OF STATE", "DEPARTMENT OF LABOR",
+                                "DEPARTMENT OF HOUSING AND URBAN DEVELOPMENT", "SMALL BUSINESS ADMINISTRATION",
+                                "NATIONAL SCIENCE FOUNDATION", "NATIONAL INSTITUTES OF HEALTH",
+                                "CENTERS FOR DISEASE CONTROL AND PREVENTION", "FOOD AND DRUG ADMINISTRATION",
+                                "FEDERAL AVIATION ADMINISTRATION", "DEPARTMENT OF THE ARMY",
+                                "DEPARTMENT OF THE NAVY", "DEPARTMENT OF THE AIR FORCE",
+                                "DEFENSE INFORMATION SYSTEMS AGENCY", "DEFENSE LOGISTICS AGENCY",
+                                "DEFENSE CONTRACT MANAGEMENT AGENCY"
+                            ],
+                            certifications=[
+                                "SDVOSB", "8(a)", "WOSB", "EDWOSB", "HUBZone", "VOSB", "SDB",
+                                "ISO 9001", "ISO 27001", "CMMI", "SOC 2", "FedRAMP",
+                                "GSA Schedule", "GSA IT Schedule 70", "GSA Professional Services Schedule",
+                                "NIH CIO-SP3", "OASIS", "Alliant 2"
+                            ],
+                            offices=[
+                                "Washington, DC", "Arlington, VA", "Alexandria, VA", "Reston, VA",
+                                "Tysons Corner, VA", "McLean, VA", "Bethesda, MD", "Rockville, MD",
+                                "San Antonio, TX", "Colorado Springs, CO", "Huntsville, AL",
+                                "Dayton, OH", "Remote"
+                            ],
+                            role_preference="Either",
+                            tenant_id=tenant_id,
+                            min_contract_value=100000.0,   # $100K
+                            max_contract_value=50000000.0   # $50M
+                        )
+                        st.session_state.profile = profile
+                        st.success("✅ Created 'Comprehensive IT Solutions LLC' profile! Select it from the dropdown above.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error creating profile: {str(e)}")
+                    logger.error(f"Error creating comprehensive profile: {e}")
+        
         # Create/Edit Profile
         # Only show if we have a profile name (either selected or entered)
         profile_name_for_form = None
