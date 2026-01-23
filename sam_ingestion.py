@@ -163,6 +163,10 @@ class SAMIngestion:
         
         if active_only:
             params["active"] = "true"
+            # Also filter by response deadline to exclude expired opportunities
+            # Only include opportunities with deadlines in the future
+            params["responseDeadlineFrom"] = datetime.now().strftime("%m/%d/%Y")
+            params["responseDeadlineTo"] = (datetime.now() + timedelta(days=days_ahead)).strftime("%m/%d/%Y")
         
         if naics:
             params["naics"] = ",".join(naics)
@@ -477,6 +481,22 @@ class SAMIngestion:
         for opp in raw_opportunities:
             parsed = await self._parse_opportunity(opp)
             opportunities.append(parsed)
+        
+        # Filter out expired opportunities if active_only is True
+        if active_only:
+            now = datetime.now()
+            filtered_opportunities = []
+            for opp in opportunities:
+                # If no due_date, include it (can't determine if expired)
+                if not opp.due_date:
+                    filtered_opportunities.append(opp)
+                # Only include if due_date is in the future
+                elif opp.due_date > now:
+                    filtered_opportunities.append(opp)
+                else:
+                    logger.debug(f"Filtered out expired opportunity: {opp.notice_id} (due: {opp.due_date})")
+            opportunities = filtered_opportunities
+        
         return opportunities
     
     def _get_mock_opportunities(self) -> List[Dict[str, Any]]:
