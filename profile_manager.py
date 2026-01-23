@@ -27,7 +27,9 @@ class ProfileManager:
         certifications: list = None,
         offices: list = None,
         role_preference: str = "Prime",
-        tenant_id: Optional[int] = None
+        tenant_id: Optional[int] = None,
+        min_contract_value: Optional[float] = None,
+        max_contract_value: Optional[float] = None
     ) -> CapabilityProfile:
         """
         Create a new capability profile.
@@ -41,6 +43,9 @@ class ProfileManager:
             certifications: List of certifications (e.g., SDVOSB, 8(a))
             offices: List of office locations (e.g., "Washington, DC", "Arlington, VA")
             role_preference: Prime, Subcontractor, or Either
+            tenant_id: Tenant ID for multi-tenant support
+            min_contract_value: Minimum contract value in dollars (optional)
+            max_contract_value: Maximum contract value in dollars (optional)
             
         Returns:
             CapabilityProfile object
@@ -53,7 +58,9 @@ class ProfileManager:
             preferred_agencies=preferred_agencies or [],
             certifications=certifications or [],
             offices=offices or [],
-            role_preference=role_preference
+            role_preference=role_preference,
+            min_contract_value=min_contract_value,
+            max_contract_value=max_contract_value
         )
         
         # Save to database with tenant_id
