@@ -155,7 +155,7 @@ class SAMIngestion:
         """
         params = {
             "limit": limit,
-            "postedFrom": (datetime.now() - timedelta(days=1)).strftime("%m/%d/%Y"),
+            "postedFrom": (datetime.now() - timedelta(days=7)).strftime("%m/%d/%Y"),  # Look back 7 days
             "postedTo": (datetime.now() + timedelta(days=days_ahead)).strftime("%m/%d/%Y"),
         }
         
@@ -163,10 +163,9 @@ class SAMIngestion:
         
         if active_only:
             params["active"] = "true"
-            # Also filter by response deadline to exclude expired opportunities
-            # Only include opportunities with deadlines in the future
-            params["responseDeadlineFrom"] = datetime.now().strftime("%m/%d/%Y")
-            params["responseDeadlineTo"] = (datetime.now() + timedelta(days=days_ahead)).strftime("%m/%d/%Y")
+            # Note: We don't filter by responseDeadline here because the SAM.gov API
+            # may not support those parameters. Instead, we filter expired opportunities
+            # after parsing in the get_opportunities() method.
         
         if naics:
             params["naics"] = ",".join(naics)
@@ -287,21 +286,22 @@ class SAMIngestion:
                     elif opp.get("naics"):
                         opp_naics = opp["naics"] if isinstance(opp["naics"], list) else [opp["naics"]]
                     
-                    # Check if any NAICS matches IT codes (STRICT - must have IT NAICS)
+                    # Check if any NAICS matches IT codes
                     if any(naics in IT_NAICS_CODES for naics in opp_naics):
-                        # Additional validation: title/description should contain IT keywords
+                        # If it has IT NAICS codes, include it (less strict filtering)
+                        it_opportunities.append(opp)
+                    # Also check if title/description contains IT keywords (even without IT NAICS)
+                    else:
                         title_desc = f"{opp.get('title', '')} {opp.get('description', '')}".lower()
                         it_keywords = [
                             "software", "information technology", "IT", "computer", "system", "data",
                             "artificial intelligence", "AI", "machine learning", "cloud", "cybersecurity",
                             "network", "application", "platform", "database", "analytics", "digital",
-                            "automation", "devops", "infrastructure", "enterprise", "solution"
+                            "automation", "devops", "infrastructure", "enterprise", "solution",
+                            "programming", "development", "engineering", "technical", "technology"
                         ]
-                        # Must have at least one IT keyword in title/description
+                        # If it has strong IT keywords, include it
                         if any(kw in title_desc for kw in it_keywords):
-                            it_opportunities.append(opp)
-                        # If NAICS is clearly IT but no keywords, still include (might be brief description)
-                        elif any(naics in ["541511", "541512", "541513", "541519"] for naics in opp_naics):
                             it_opportunities.append(opp)
             
             if it_opportunities:
