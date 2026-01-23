@@ -161,9 +161,27 @@ async def fetch_and_classify_opportunities(
         limit=100  # Balanced limit to get opportunities without timeout
     )
     
-    # Classify opportunities
-    with st.spinner("Classifying opportunities with AI..."):
-        opportunities = classifier.classify_batch(opportunities)
+    # Classify opportunities with progress tracking
+    if opportunities:
+        status_text.text(f"Step 2/3: Classifying {len(opportunities)} opportunities...")
+        progress_bar.progress(40)
+        
+        # Use rule-based classification if no OpenAI key (much faster)
+        if not settings.openai_api_key:
+            # Fast rule-based classification
+            opportunities = classifier.classify_batch(opportunities)
+        else:
+            # AI classification with progress
+            classified = []
+            total = len(opportunities)
+            for i, opp in enumerate(opportunities):
+                classified.append(classifier.classify_opportunity(opp))
+                # Update progress every 10 opportunities
+                if (i + 1) % 10 == 0 or (i + 1) == total:
+                    progress = 40 + int((i + 1) / total * 40)  # 40-80% for classification
+                    progress_bar.progress(progress)
+                    status_text.text(f"Step 2/3: Classifying {i + 1}/{total} opportunities...")
+            opportunities = classified
     
     # Save to database
     for opp in opportunities:
@@ -637,8 +655,8 @@ def main():
                 st.error("⏱️ Request timed out. The SAM.gov API may be slow. Try reducing 'Days Ahead' or try again later.")
                 return
             
-            progress_bar.progress(80)
-            status_text.text("Step 2/3: Processing opportunities...")
+            progress_bar.progress(85)
+            status_text.text("Step 3/3: Saving opportunities to database...")
             
             st.session_state.opportunities = opportunities
             
