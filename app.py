@@ -717,7 +717,9 @@ def main():
             
             # Check if any are mock opportunities
             mock_count = sum(1 for opp in opportunities if opp.notice_id.startswith("MOCK-"))
-            if mock_count > 0:
+            if quick_test_mode:
+                st.success(f"⚡ **Quick Test Mode:** Fetched {len(opportunities)} opportunities using fast rule-based classification (no AI). Perfect for testing!")
+            elif mock_count > 0:
                 st.warning(f"⚠️ **Using Mock Data:** {mock_count} of {len(opportunities)} opportunities are sample/test data. To get real opportunities, ensure your SAM.gov API key is configured in Streamlit Cloud secrets.")
             else:
                 st.success(f"✅ Fetched {len(opportunities)} real opportunities from SAM.gov")
