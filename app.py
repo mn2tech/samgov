@@ -147,7 +147,9 @@ def get_expiry_status(opportunity: Opportunity):
 async def fetch_and_classify_opportunities(
     days_ahead: int = 30,
     naics: Optional[List[str]] = None,
-    keywords: Optional[List[str]] = None
+    keywords: Optional[List[str]] = None,
+    status_text=None,
+    progress_bar=None
 ) -> List[Opportunity]:
     """Fetch and classify opportunities."""
     ingestion = st.session_state.ingestion
@@ -163,8 +165,10 @@ async def fetch_and_classify_opportunities(
     
     # Classify opportunities with progress tracking
     if opportunities:
-        status_text.text(f"Step 2/3: Classifying {len(opportunities)} opportunities...")
-        progress_bar.progress(40)
+        if status_text:
+            status_text.text(f"Step 2/3: Classifying {len(opportunities)} opportunities...")
+        if progress_bar:
+            progress_bar.progress(40)
         
         # Use rule-based classification if no OpenAI key (much faster)
         if not settings.openai_api_key:
@@ -183,16 +187,20 @@ async def fetch_and_classify_opportunities(
                     classified.append(classifier.classify_opportunity(opp))
                     # Update progress every 5 opportunities
                     if (i + 1) % 5 == 0 or (i + 1) == max_ai_classify:
-                        progress = 40 + int((i + 1) / max_ai_classify * 35)  # 40-75% for AI classification
-                        progress_bar.progress(progress)
-                        status_text.text(f"Step 2/3: AI classifying {i + 1}/{min(max_ai_classify, total)} opportunities...")
+                        if progress_bar:
+                            progress = 40 + int((i + 1) / max_ai_classify * 35)  # 40-75% for AI classification
+                            progress_bar.progress(progress)
+                        if status_text:
+                            status_text.text(f"Step 2/3: AI classifying {i + 1}/{min(max_ai_classify, total)} opportunities...")
                 else:
                     # Use fast rule-based for the rest
                     classified.append(classifier._rule_based_classify(opp))
                     if (i + 1) % 20 == 0 or (i + 1) == total:
-                        progress = 75 + int((i + 1 - max_ai_classify) / (total - max_ai_classify) * 10) if total > max_ai_classify else 85
-                        progress_bar.progress(progress)
-                        status_text.text(f"Step 2/3: Processing {i + 1}/{total} opportunities...")
+                        if progress_bar:
+                            progress = 75 + int((i + 1 - max_ai_classify) / (total - max_ai_classify) * 10) if total > max_ai_classify else 85
+                            progress_bar.progress(progress)
+                        if status_text:
+                            status_text.text(f"Step 2/3: Processing {i + 1}/{total} opportunities...")
             
             opportunities = classified
     
@@ -658,7 +666,11 @@ def main():
             # Create async function with timeout
             async def fetch_with_timeout():
                 return await asyncio.wait_for(
-                    fetch_and_classify_opportunities(days_ahead=days_ahead),
+                    fetch_and_classify_opportunities(
+                        days_ahead=days_ahead,
+                        status_text=status_text,
+                        progress_bar=progress_bar
+                    ),
                     timeout=120.0  # 2 minute timeout
                 )
             
