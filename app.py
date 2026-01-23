@@ -662,8 +662,8 @@ def main():
                 # Description endpoint errors are expected - just log, don't show to user
                 logger.debug(f"Description endpoint error (expected): {e}")
                 # Still show success if we got opportunities
-                    if st.session_state.opportunities:
-                        st.success(f"✅ Fetched {len(st.session_state.opportunities)} opportunities (some descriptions may be unavailable)")
+                if st.session_state.opportunities:
+                    st.success(f"✅ Fetched {len(st.session_state.opportunities)} opportunities (some descriptions may be unavailable)")
     
     # Score opportunities button
     if st.session_state.opportunities and st.button("📊 Score Opportunities", type="primary"):
