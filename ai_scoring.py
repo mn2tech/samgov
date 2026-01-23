@@ -297,28 +297,39 @@ Return ONLY the JSON object, no other text."""
         
         explanation = f"Domain match: {domain_match:.0f}%, NAICS: {naics_match:.0f}%, Skills: {technical_skill_match:.0f}%"
         
-        # Convert profile to dict for Pydantic v2 compatibility
-        # Pydantic v2 requires nested models to be passed as dicts or properly validated instances
-        if isinstance(profile, CapabilityProfile):
-            try:
-                # Try using model_dump (Pydantic v2)
-                profile_dict = profile.model_dump()
-            except AttributeError:
-                # Fallback to dict() for Pydantic v1
-                profile_dict = profile.dict()
-        else:
-            profile_dict = profile
-        
-        return OpportunityScore(
-            opportunity=opportunity,
-            capability_profile=profile_dict,  # Pass as dict - Pydantic will validate it
-            fit_score=round(fit_score, 2),
-            breakdown=breakdown,
-            explanation=explanation,
-            risk_factors=["Rule-based scoring used (AI unavailable)"],
-            recommended_action=recommended_action,
-            reasoning=explanation
-        )
+        # Pass profile directly - Pydantic v2 should handle CapabilityProfile instances
+        # If that fails, convert to dict
+        try:
+            return OpportunityScore(
+                opportunity=opportunity,
+                capability_profile=profile,  # Try passing instance directly
+                fit_score=round(fit_score, 2),
+                breakdown=breakdown,
+                explanation=explanation,
+                risk_factors=["Rule-based scoring used (AI unavailable)"],
+                recommended_action=recommended_action,
+                reasoning=explanation
+            )
+        except Exception:
+            # Fallback: convert to dict if direct instance doesn't work
+            if isinstance(profile, CapabilityProfile):
+                try:
+                    profile_dict = profile.model_dump()
+                except AttributeError:
+                    profile_dict = profile.dict()
+            else:
+                profile_dict = profile
+            
+            return OpportunityScore(
+                opportunity=opportunity,
+                capability_profile=CapabilityProfile(**profile_dict),  # Reconstruct from dict
+                fit_score=round(fit_score, 2),
+                breakdown=breakdown,
+                explanation=explanation,
+                risk_factors=["Rule-based scoring used (AI unavailable)"],
+                recommended_action=recommended_action,
+                reasoning=explanation
+            )
     
     def score_batch(
         self,
