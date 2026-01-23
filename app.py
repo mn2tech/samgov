@@ -158,7 +158,7 @@ async def fetch_and_classify_opportunities(
         days_ahead=days_ahead,
         naics=naics,
         keywords=keywords,
-        limit=50
+        limit=200  # Increased limit to get more opportunities
     )
     
     # Classify opportunities

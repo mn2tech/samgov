@@ -155,7 +155,7 @@ class SAMIngestion:
         """
         params = {
             "limit": limit,
-            "postedFrom": (datetime.now() - timedelta(days=7)).strftime("%m/%d/%Y"),  # Look back 7 days
+            "postedFrom": (datetime.now() - timedelta(days=30)).strftime("%m/%d/%Y"),  # Look back 30 days
             "postedTo": (datetime.now() + timedelta(days=days_ahead)).strftime("%m/%d/%Y"),
         }
         
