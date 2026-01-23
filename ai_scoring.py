@@ -95,19 +95,25 @@ class AIScoringEngine:
                 recommended_action = RecommendedAction.IGNORE
             
             # Pass profile directly - Pydantic v2 should handle CapabilityProfile instances
+            # Get explanation and reasoning with defaults
+            explanation = score_data.get("explanation", "AI scoring completed")
+            reasoning = score_data.get("reasoning", explanation)
+            risk_factors = score_data.get("risk_factors", [])
+            
             try:
                 return OpportunityScore(
                     opportunity=opportunity,
                     capability_profile=profile,  # Try passing instance directly
                     fit_score=round(fit_score, 2),
                     breakdown=breakdown,
-                    explanation=score_data["explanation"],
-                    risk_factors=score_data.get("risk_factors", []),
+                    explanation=explanation,
+                    risk_factors=risk_factors,
                     recommended_action=recommended_action,
-                    reasoning=score_data.get("reasoning", score_data["explanation"])
+                    reasoning=reasoning
                 )
-            except Exception:
+            except (ValueError, TypeError) as e:
                 # Fallback: convert to dict and reconstruct if direct instance doesn't work
+                logger.debug(f"Direct profile instance failed, converting to dict: {e}")
                 if isinstance(profile, CapabilityProfile):
                     try:
                         profile_dict = profile.model_dump()
@@ -121,10 +127,10 @@ class AIScoringEngine:
                     capability_profile=CapabilityProfile(**profile_dict),  # Reconstruct from dict
                     fit_score=round(fit_score, 2),
                     breakdown=breakdown,
-                    explanation=score_data["explanation"],
-                    risk_factors=score_data.get("risk_factors", []),
+                    explanation=explanation,
+                    risk_factors=risk_factors,
                     recommended_action=recommended_action,
-                    reasoning=score_data.get("reasoning", score_data["explanation"])
+                    reasoning=reasoning
                 )
             
         except Exception as e:
