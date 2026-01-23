@@ -88,28 +88,38 @@ class AIScoringEngine:
             else:
                 recommended_action = RecommendedAction.IGNORE
             
-            # Convert profile to dict for Pydantic v2 compatibility
-            # Pydantic v2 requires nested models to be passed as dicts or properly validated instances
-            if isinstance(profile, CapabilityProfile):
-                try:
-                    # Try using model_dump (Pydantic v2)
-                    profile_dict = profile.model_dump()
-                except AttributeError:
-                    # Fallback to dict() for Pydantic v1
-                    profile_dict = profile.dict()
-            else:
-                profile_dict = profile
-            
-            return OpportunityScore(
-                opportunity=opportunity,
-                capability_profile=profile_dict,  # Pass as dict - Pydantic will validate it
-                fit_score=round(fit_score, 2),
-                breakdown=breakdown,
-                explanation=score_data["explanation"],
-                risk_factors=score_data.get("risk_factors", []),
-                recommended_action=recommended_action,
-                reasoning=score_data.get("reasoning", score_data["explanation"])
-            )
+            # Pass profile directly - Pydantic v2 should handle CapabilityProfile instances
+            try:
+                return OpportunityScore(
+                    opportunity=opportunity,
+                    capability_profile=profile,  # Try passing instance directly
+                    fit_score=round(fit_score, 2),
+                    breakdown=breakdown,
+                    explanation=score_data["explanation"],
+                    risk_factors=score_data.get("risk_factors", []),
+                    recommended_action=recommended_action,
+                    reasoning=score_data.get("reasoning", score_data["explanation"])
+                )
+            except Exception:
+                # Fallback: convert to dict and reconstruct if direct instance doesn't work
+                if isinstance(profile, CapabilityProfile):
+                    try:
+                        profile_dict = profile.model_dump()
+                    except AttributeError:
+                        profile_dict = profile.dict()
+                else:
+                    profile_dict = profile
+                
+                return OpportunityScore(
+                    opportunity=opportunity,
+                    capability_profile=CapabilityProfile(**profile_dict),  # Reconstruct from dict
+                    fit_score=round(fit_score, 2),
+                    breakdown=breakdown,
+                    explanation=score_data["explanation"],
+                    risk_factors=score_data.get("risk_factors", []),
+                    recommended_action=recommended_action,
+                    reasoning=score_data.get("reasoning", score_data["explanation"])
+                )
             
         except Exception as e:
             logger.error(f"Error scoring opportunity {opportunity.notice_id}: {e}")
