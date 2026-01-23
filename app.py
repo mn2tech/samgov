@@ -415,7 +415,8 @@ def main():
                             preferred_agencies=[a.strip() for a in preferred_agencies.split(",") if a.strip()],
                             certifications=[c.strip() for c in certifications.split(",") if c.strip()],
                             offices=[o.strip() for o in offices.split(",") if o.strip()] if offices else [],
-                            role_preference=role_preference
+                            role_preference=role_preference,
+                            tenant_id=tenant_id
                         )
                         st.session_state.profile = profile
                         st.success(f"✅ Profile saved for {profile_name_for_form}!")
