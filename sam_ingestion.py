@@ -48,7 +48,7 @@ class SAMIngestion:
     def __init__(self):
         self.api_key = settings.sam_api_key
         self.base_url = settings.sam_api_base_url
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(timeout=60.0)  # Increased timeout for large requests
     
     async def close(self):
         """Close HTTP client."""
@@ -103,8 +103,12 @@ class SAMIngestion:
             
             # The noticedesc endpoint REQUIRES header authentication (X-Api-Key)
             # Query parameter authentication returns 500 Internal Server Error
+            # Use shorter timeout for description fetching to avoid blocking
             headers = {"X-Api-Key": self.api_key}
-            response = await self.client.get(description_url, headers=headers)
+            response = await asyncio.wait_for(
+                self.client.get(description_url, headers=headers, timeout=5.0),
+                timeout=5.0
+            )
             
             if response.status_code == 200:
                 # The response is JSON with a "description" field

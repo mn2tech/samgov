@@ -153,12 +153,12 @@ async def fetch_and_classify_opportunities(
     ingestion = st.session_state.ingestion
     classifier = st.session_state.classifier
     
-    # Fetch opportunities
+    # Fetch opportunities (reduced limit to avoid timeouts)
     opportunities = await ingestion.get_opportunities(
         days_ahead=days_ahead,
         naics=naics,
         keywords=keywords,
-        limit=200  # Increased limit to get more opportunities
+        limit=100  # Balanced limit to get opportunities without timeout
     )
     
     # Classify opportunities
@@ -614,21 +614,46 @@ def main():
     
     # Fetch opportunities button
     if st.button("🔍 Fetch Opportunities from SAM.gov", type="primary"):
-        with st.spinner("Fetching opportunities from SAM.gov..."):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        try:
+            status_text.text("Step 1/3: Fetching opportunities from SAM.gov...")
+            progress_bar.progress(20)
+            
+            # Add timeout wrapper
+            import asyncio
             try:
-                opportunities = asyncio.run(fetch_and_classify_opportunities(
-                    days_ahead=days_ahead
-                ))
-                st.session_state.opportunities = opportunities
-                
-                # Check if any are mock opportunities
-                mock_count = sum(1 for opp in opportunities if opp.notice_id.startswith("MOCK-"))
-                if mock_count > 0:
-                    st.warning(f"⚠️ **Using Mock Data:** {mock_count} of {len(opportunities)} opportunities are sample/test data. To get real opportunities, ensure your SAM.gov API key is configured in `.env` file.")
-                else:
-                    st.success(f"✅ Fetched {len(opportunities)} real opportunities from SAM.gov")
-            except Exception as e:
-                # Filter out description endpoint errors (they're expected and handled)
+                opportunities = asyncio.wait_for(
+                    fetch_and_classify_opportunities(days_ahead=days_ahead),
+                    timeout=120.0  # 2 minute timeout
+                )
+            except asyncio.TimeoutError:
+                st.error("⏱️ Request timed out. The SAM.gov API may be slow. Try reducing 'Days Ahead' or try again later.")
+                return
+            
+            progress_bar.progress(80)
+            status_text.text("Step 2/3: Processing opportunities...")
+            
+            st.session_state.opportunities = opportunities
+            
+            progress_bar.progress(100)
+            status_text.text("Step 3/3: Complete!")
+            
+            # Check if any are mock opportunities
+            mock_count = sum(1 for opp in opportunities if opp.notice_id.startswith("MOCK-"))
+            if mock_count > 0:
+                st.warning(f"⚠️ **Using Mock Data:** {mock_count} of {len(opportunities)} opportunities are sample/test data. To get real opportunities, ensure your SAM.gov API key is configured in Streamlit Cloud secrets.")
+            else:
+                st.success(f"✅ Fetched {len(opportunities)} real opportunities from SAM.gov")
+            
+            progress_bar.empty()
+            status_text.empty()
+            
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+            # Filter out description endpoint errors (they're expected and handled)
                 error_msg = str(e)
                 if "API_KEY_INVALID" not in error_msg and "noticedesc" not in error_msg.lower():
                     st.error(f"Error fetching opportunities: {e}")
