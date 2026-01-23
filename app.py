@@ -623,11 +623,16 @@ def main():
             
             # Add timeout wrapper
             import asyncio
-            try:
-                opportunities = asyncio.wait_for(
+            
+            # Create async function with timeout
+            async def fetch_with_timeout():
+                return await asyncio.wait_for(
                     fetch_and_classify_opportunities(days_ahead=days_ahead),
                     timeout=120.0  # 2 minute timeout
                 )
+            
+            try:
+                opportunities = asyncio.run(fetch_with_timeout())
             except asyncio.TimeoutError:
                 st.error("⏱️ Request timed out. The SAM.gov API may be slow. Try reducing 'Days Ahead' or try again later.")
                 return
