@@ -4,6 +4,7 @@ Pulls federal IT/AI/Data/Cloud/Cyber opportunities from SAM.gov.
 """
 import httpx
 import logging
+import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from dateutil import parser as date_parser
