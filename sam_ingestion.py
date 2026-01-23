@@ -490,11 +490,26 @@ class SAMIngestion:
                 # If no due_date, include it (can't determine if expired)
                 if not opp.due_date:
                     filtered_opportunities.append(opp)
-                # Only include if due_date is in the future
-                elif opp.due_date > now:
-                    filtered_opportunities.append(opp)
                 else:
-                    logger.debug(f"Filtered out expired opportunity: {opp.notice_id} (due: {opp.due_date})")
+                    # Normalize datetime for comparison (handle timezone-aware vs naive)
+                    due_date = opp.due_date
+                    # If due_date is timezone-aware, make now timezone-aware too
+                    if due_date.tzinfo is not None:
+                        from datetime import timezone
+                        now_aware = now.replace(tzinfo=timezone.utc) if now.tzinfo is None else now
+                        # Only include if due_date is in the future
+                        if due_date > now_aware:
+                            filtered_opportunities.append(opp)
+                        else:
+                            logger.debug(f"Filtered out expired opportunity: {opp.notice_id} (due: {due_date})")
+                    else:
+                        # If due_date is naive, make sure now is also naive
+                        now_naive = now.replace(tzinfo=None) if now.tzinfo is not None else now
+                        # Only include if due_date is in the future
+                        if due_date > now_naive:
+                            filtered_opportunities.append(opp)
+                        else:
+                            logger.debug(f"Filtered out expired opportunity: {opp.notice_id} (due: {due_date})")
             opportunities = filtered_opportunities
         
         return opportunities
