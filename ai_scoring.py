@@ -370,5 +370,24 @@ Return ONLY the JSON object, no other text."""
         opportunities: List[Opportunity],
         profile: CapabilityProfile
     ) -> List[OpportunityScore]:
-        """Score multiple opportunities."""
-        return [self.score_opportunity(opp, profile) for opp in opportunities]
+        """
+        Score multiple opportunities.
+        Uses AI for first 20 opportunities, then rule-based for the rest (much faster).
+        """
+        if not self.client:
+            # No AI available - use rule-based for all
+            return [self._rule_based_score(opp, profile) for opp in opportunities]
+        
+        # Limit AI scoring to first 20 for speed (rest use fast rule-based)
+        max_ai_score = 20
+        scores = []
+        
+        for i, opp in enumerate(opportunities):
+            if i < max_ai_score:
+                # Use AI for first batch
+                scores.append(self.score_opportunity(opp, profile))
+            else:
+                # Use fast rule-based for the rest
+                scores.append(self._rule_based_score(opp, profile))
+        
+        return scores

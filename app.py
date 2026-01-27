@@ -232,13 +232,42 @@ def score_opportunities(
     """Score opportunities against profile."""
     scorer = st.session_state.scorer
     
-    with st.spinner("Scoring opportunities with AI..."):
-        scores = scorer.score_batch(opportunities, profile)
+    # Show progress for scoring
+    total = len(opportunities)
+    max_ai_score = 20
+    progress_bar = st.progress(0)
+    status_text = st.empty()
     
-    # Save scores to database with tenant_id
-    tenant_id = get_current_tenant_id()
-    for score in scores:
-        db.save_score(score, tenant_id=tenant_id)
+    try:
+        scores = []
+        for i, opp in enumerate(opportunities):
+            if i < max_ai_score:
+                # AI scoring for first 20
+                status_text.text(f"📊 Scoring {i + 1}/{min(max_ai_score, total)} opportunities with AI...")
+                scores.append(scorer.score_opportunity(opp, profile))
+                progress_bar.progress((i + 1) / total)
+            else:
+                # Fast rule-based for the rest
+                if i == max_ai_score:
+                    status_text.text(f"📊 Fast scoring remaining {total - max_ai_score} opportunities...")
+                scores.append(scorer._rule_based_score(opp, profile))
+                if (i + 1) % 10 == 0 or (i + 1) == total:
+                    progress_bar.progress((i + 1) / total)
+        
+        status_text.text(f"✅ Scored {total} opportunities!")
+        progress_bar.progress(1.0)
+        
+    finally:
+        # Save scores to database with tenant_id
+        tenant_id = get_current_tenant_id()
+        for score in scores:
+            db.save_score(score, tenant_id=tenant_id)
+        
+        # Clear progress indicators after a short delay
+        import time
+        time.sleep(0.5)
+        progress_bar.empty()
+        status_text.empty()
     
     return scores
 
