@@ -188,9 +188,9 @@ async def fetch_and_classify_opportunities(
             if progress_bar:
                 progress_bar.progress(80)
         else:
-            # AI classification with progress - limit to first 50 for speed
-            # Rest will use rule-based classification
-            max_ai_classify = 50
+            # AI classification with progress - limit to first 20 for speed
+            # Rest will use rule-based classification (much faster)
+            max_ai_classify = 20  # Reduced from 50 to 20 for faster processing
             classified = []
             total = len(opportunities)
             
@@ -198,8 +198,8 @@ async def fetch_and_classify_opportunities(
                 if i < max_ai_classify:
                     # Use AI for first batch
                     classified.append(classifier.classify_opportunity(opp))
-                    # Update progress every 5 opportunities
-                    if (i + 1) % 5 == 0 or (i + 1) == max_ai_classify:
+                    # Update progress every 3 opportunities for better feedback
+                    if (i + 1) % 3 == 0 or (i + 1) == max_ai_classify:
                         if progress_bar:
                             progress = 40 + int((i + 1) / max_ai_classify * 35)  # 40-75% for AI classification
                             progress_bar.progress(progress)
@@ -694,15 +694,17 @@ def main():
             help="Select an agency to filter opportunities" if unique_agencies else "No agencies available. Fetch opportunities first."
         )
     
-    # Quick Test Mode option
+    # Quick Test Mode option - make it more prominent
     col_fetch1, col_fetch2 = st.columns([3, 1])
     with col_fetch1:
         quick_test_mode = st.checkbox(
-            "⚡ Quick Test Mode (Fast - No AI, Limited Results)",
+            "⚡ Quick Test Mode (Recommended - Fast, No AI, 20 opportunities)",
             value=False,
             key="quick_test_mode",
-            help="Use rule-based classification only. Faster but less accurate. Limits to 20 opportunities."
+            help="Use rule-based classification only. Much faster (seconds vs minutes). Limits to 20 opportunities. Perfect for testing!"
         )
+        if not quick_test_mode:
+            st.info("💡 **Tip:** Enable Quick Test Mode for faster results (no AI classification). AI mode classifies 20 opportunities with AI, which takes longer.")
     
     # Fetch opportunities button
     if st.button("🔍 Fetch Opportunities from SAM.gov", type="primary"):
