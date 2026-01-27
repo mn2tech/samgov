@@ -352,6 +352,63 @@ def main():
                 else:
                     st.warning(f"No profile found for {profile_name}.")
         
+        # Quick create simple sample profile
+        st.markdown("---")
+        with st.expander("🚀 Quick Start: Create Sample IT Profile", expanded=False):
+            st.markdown("""
+            **Create a simple sample IT profile** with limited selections for testing:
+            - 8 technical skills
+            - 3 NAICS codes  
+            - 3 federal agencies
+            """)
+            if st.button("✨ Create Sample IT Profile", key="create_sample_profile"):
+                try:
+                    # Check if it already exists
+                    existing = profile_manager.get_profile("Sample IT Company", tenant_id=tenant_id)
+                    if existing:
+                        st.warning("Profile 'Sample IT Company' already exists. Select it from the dropdown above.")
+                    else:
+                        # Create simple sample profile with limited selections
+                        profile = profile_manager.create_profile(
+                            company_name="Sample IT Company",
+                            core_domains=[
+                                "AI/ML",
+                                "Data Analytics/Engineering",
+                                "Cloud Architecture & Migration"
+                            ],
+                            technical_skills=[
+                                "Python",
+                                "SQL",
+                                "AWS",
+                                "Azure",
+                                "Kubernetes",
+                                "Terraform",
+                                "Docker",
+                                "Machine Learning"
+                            ],
+                            naics=[
+                                "541511",
+                                "541512",
+                                "541519"
+                            ],
+                            preferred_agencies=[
+                                "DEPT OF DEFENSE",
+                                "DEPT OF HOMELAND SECURITY",
+                                "GENERAL SERVICES ADMINISTRATION"
+                            ],
+                            certifications=[
+                                "SDVOSB"
+                            ],
+                            role_preference="Either",
+                            tenant_id=tenant_id
+                        )
+                        st.session_state.profile = profile
+                        st.success("✅ Created 'Sample IT Company' profile! Select it from the dropdown above.")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Error creating profile: {str(e)}")
+                    logger.error(f"Error creating sample profile: {e}")
+        
         # Create/Edit Profile
         # Only show if we have a profile name (either selected or entered)
         profile_name_for_form = None
