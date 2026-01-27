@@ -287,8 +287,28 @@ def show_login_page():
             login_url = auth.get_login_url()
             
             if login_url:
+                # Detect if we're on Streamlit Cloud
+                # On Streamlit Cloud, OAuth redirects work better in a new tab
+                # due to iframe restrictions and security policies
+                is_streamlit_cloud = False
+                if auth.redirect_uri:
+                    # Check redirect URI for Streamlit Cloud patterns
+                    is_streamlit_cloud = (
+                        'streamlit.app' in auth.redirect_uri or 
+                        'share.streamlit.io' in auth.redirect_uri or
+                        auth.redirect_uri.startswith('https://') and 'localhost' not in auth.redirect_uri
+                    )
+                
+                # Use _blank for Streamlit Cloud, _self for local
+                # This ensures OAuth redirects work properly on Streamlit Cloud
+                target = "_blank" if is_streamlit_cloud else "_self"
+                
+                # Add a helpful note for Streamlit Cloud users
+                if is_streamlit_cloud:
+                    st.info("💡 **Note:** Sign-in will open in a new tab. After signing in with Google, you'll be redirected back to the app automatically.")
+                
                 st.markdown(f"""
-                <a href="{login_url}" target="_self">
+                <a href="{login_url}" target="{target}" rel="noopener noreferrer">
                     <img src="https://developers.google.com/identity/images/btn_google_signin_dark_normal_web.png" alt="Sign in with Google">
                 </a>
                 """, unsafe_allow_html=True)
