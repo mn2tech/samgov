@@ -363,14 +363,12 @@ def main():
             """)
             if st.button("✨ Create Sample IT Profile", key="create_sample_profile"):
                 try:
-                    # Check if it already exists
-                    existing = profile_manager.get_profile("Sample IT Company", tenant_id=tenant_id)
-                    if existing:
-                        st.warning("Profile 'Sample IT Company' already exists. Select it from the dropdown above.")
-                    else:
-                        # Create simple sample profile with limited selections
+                    # Replace old comprehensive profile if it exists with simple version
+                    old_comprehensive = profile_manager.get_profile("Comprehensive IT Solutions LLC", tenant_id=tenant_id)
+                    if old_comprehensive:
+                        # Update the comprehensive profile to have simple limited data
                         profile = profile_manager.create_profile(
-                            company_name="Sample IT Company",
+                            company_name="Comprehensive IT Solutions LLC",
                             core_domains=[
                                 "AI/ML",
                                 "Data Analytics/Engineering",
@@ -403,8 +401,87 @@ def main():
                             tenant_id=tenant_id
                         )
                         st.session_state.profile = profile
-                        st.success("✅ Created 'Sample IT Company' profile! Select it from the dropdown above.")
+                        st.success("✅ Updated 'Comprehensive IT Solutions LLC' profile with limited selections!")
                         st.rerun()
+                    else:
+                        # Check if simple sample already exists
+                        existing = profile_manager.get_profile("Sample IT Company", tenant_id=tenant_id)
+                        if existing:
+                            # Update existing to ensure it has limited data
+                            profile = profile_manager.create_profile(
+                                company_name="Sample IT Company",
+                                core_domains=[
+                                    "AI/ML",
+                                    "Data Analytics/Engineering",
+                                    "Cloud Architecture & Migration"
+                                ],
+                                technical_skills=[
+                                    "Python",
+                                    "SQL",
+                                    "AWS",
+                                    "Azure",
+                                    "Kubernetes",
+                                    "Terraform",
+                                    "Docker",
+                                    "Machine Learning"
+                                ],
+                                naics=[
+                                    "541511",
+                                    "541512",
+                                    "541519"
+                                ],
+                                preferred_agencies=[
+                                    "DEPT OF DEFENSE",
+                                    "DEPT OF HOMELAND SECURITY",
+                                    "GENERAL SERVICES ADMINISTRATION"
+                                ],
+                                certifications=[
+                                    "SDVOSB"
+                                ],
+                                role_preference="Either",
+                                tenant_id=tenant_id
+                            )
+                            st.session_state.profile = profile
+                            st.success("✅ Updated 'Sample IT Company' profile with limited selections!")
+                            st.rerun()
+                        else:
+                            # Create simple sample profile with limited selections
+                            profile = profile_manager.create_profile(
+                                company_name="Sample IT Company",
+                                core_domains=[
+                                    "AI/ML",
+                                    "Data Analytics/Engineering",
+                                    "Cloud Architecture & Migration"
+                                ],
+                                technical_skills=[
+                                    "Python",
+                                    "SQL",
+                                    "AWS",
+                                    "Azure",
+                                    "Kubernetes",
+                                    "Terraform",
+                                    "Docker",
+                                    "Machine Learning"
+                                ],
+                                naics=[
+                                    "541511",
+                                    "541512",
+                                    "541519"
+                                ],
+                                preferred_agencies=[
+                                    "DEPT OF DEFENSE",
+                                    "DEPT OF HOMELAND SECURITY",
+                                    "GENERAL SERVICES ADMINISTRATION"
+                                ],
+                                certifications=[
+                                    "SDVOSB"
+                                ],
+                                role_preference="Either",
+                                tenant_id=tenant_id
+                            )
+                            st.session_state.profile = profile
+                            st.success("✅ Created 'Sample IT Company' profile! Select it from the dropdown above.")
+                            st.rerun()
                 except Exception as e:
                     st.error(f"Error creating profile: {str(e)}")
                     logger.error(f"Error creating sample profile: {e}")
