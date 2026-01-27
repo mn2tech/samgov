@@ -157,7 +157,8 @@ async def fetch_and_classify_opportunities(
     classifier = st.session_state.classifier
     
     # Quick test mode: limit to 20 opportunities and use rule-based only
-    limit = 20 if quick_test else 100
+    # Regular mode: limit to 50 for faster processing (reduced from 100)
+    limit = 20 if quick_test else 50
     
     # Fetch opportunities
     opportunities = await ingestion.get_opportunities(
