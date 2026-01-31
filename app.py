@@ -170,9 +170,10 @@ def compute_executive_summary(scores: List[OpportunityScore]) -> Dict:
             "urgent_count": 0  # <= 3 days
         }
     
-    bid_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.BID and s.fit_score >= 80)
-    team_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.TEAM_SUB and 60 <= s.fit_score < 80)
-    ignore_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.IGNORE or s.fit_score < 60)
+    # Count by fit score thresholds (more reliable than action matching)
+    bid_count = sum(1 for s in scores if s.fit_score >= 80)
+    team_count = sum(1 for s in scores if 60 <= s.fit_score < 80)
+    ignore_count = sum(1 for s in scores if s.fit_score < 60)
     
     # Count urgency metrics
     now = datetime.now()
@@ -1039,19 +1040,18 @@ def main():
         # Feature: Executive Summary Bar - Show prominently at top
         summary = compute_executive_summary(st.session_state.scores)
         if summary["total"] > 0:
-            st.markdown("### 📊 Executive Summary")
-            col_sum1, col_sum2, col_sum3 = st.columns(3)
-            with col_sum1:
-                st.markdown(f"""
-                **Out of {summary['total']} opportunities:**
-                - 🟢 {summary['bid_count']} BID (≥80)
-                - 🟡 {summary['team_count']} TEAM (60-79)
-                - 🔴 {summary['ignore_count']} IGNORE (<60)
-                """)
-            with col_sum2:
-                st.metric("Top Due Soon", f"{summary['due_soon_count']}", help="Opportunities with ≤7 days remaining")
-            with col_sum3:
-                st.metric("Top Urgent", f"{summary['urgent_count']}", help="Opportunities with ≤3 days remaining")
+            # Use info box to make it more visible
+            st.info("""
+            **📊 Executive Summary:** Out of {} opportunities: 🟢 {} BID (≥80) | 🟡 {} TEAM (60-79) | 🔴 {} IGNORE (<60) | 
+            ⏰ {} Due Soon (≤7 days) | 🔴 {} Urgent (≤3 days)
+            """.format(
+                summary['total'],
+                summary['bid_count'],
+                summary['team_count'],
+                summary['ignore_count'],
+                summary['due_soon_count'],
+                summary['urgent_count']
+            ))
             st.markdown("---")
         
         st.header("📊 Ranked Opportunities")
