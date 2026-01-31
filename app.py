@@ -7,7 +7,7 @@ import pandas as pd
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 import json
 import io
 
@@ -50,6 +50,15 @@ if "classifier" not in st.session_state:
     st.session_state.classifier = None
 if "scorer" not in st.session_state:
     st.session_state.scorer = None
+# Feature: Free/Pro plan gating
+if "plan" not in st.session_state:
+    st.session_state.plan = "Free"  # Default to Free plan
+# Feature: Cache explanations per Notice ID to avoid re-running AI
+if "explanations_cache" not in st.session_state:
+    st.session_state.explanations_cache = {}
+# Feature: Track selected notice ID for "Why?" explanation
+if "selected_notice_id" not in st.session_state:
+    st.session_state.selected_notice_id = None
 
 
 def init_components():
@@ -142,6 +151,201 @@ def get_expiry_status(opportunity: Opportunity):
             return False, f"🟡 Soon ({days_remaining} days left)"
         else:
             return False, f"✅ Active ({days_remaining} days left)"
+
+
+def compute_executive_summary(scores: List[OpportunityScore]) -> Dict:
+    """
+    Feature: Compute executive summary statistics for scored opportunities.
+    
+    Returns:
+        Dict with counts for BID, TEAM, IGNORE, and urgency metrics
+    """
+    if not scores:
+        return {
+            "total": 0,
+            "bid_count": 0,
+            "team_count": 0,
+            "ignore_count": 0,
+            "due_soon_count": 0,  # <= 7 days
+            "urgent_count": 0  # <= 3 days
+        }
+    
+    bid_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.BID and s.fit_score >= 80)
+    team_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.TEAM_SUB and 60 <= s.fit_score < 80)
+    ignore_count = sum(1 for s in scores if s.recommended_action == RecommendedAction.IGNORE or s.fit_score < 60)
+    
+    # Count urgency metrics
+    now = datetime.now()
+    due_soon_count = 0
+    urgent_count = 0
+    
+    for score in scores:
+        if score.opportunity.due_date:
+            days_remaining = (score.opportunity.due_date - _normalize_datetime_for_comparison(score.opportunity.due_date)).days
+            if days_remaining <= 7:
+                due_soon_count += 1
+            if days_remaining <= 3:
+                urgent_count += 1
+    
+    return {
+        "total": len(scores),
+        "bid_count": bid_count,
+        "team_count": team_count,
+        "ignore_count": ignore_count,
+        "due_soon_count": due_soon_count,
+        "urgent_count": urgent_count
+    }
+
+
+def detect_recompete_signal(opportunity: Opportunity) -> str:
+    """
+    Feature: MVP heuristic to detect recompete/incumbent signals from opportunity text.
+    
+    Returns:
+        "Likely Recompete", "Likely New", or "Unknown"
+    """
+    # Combine title and description for keyword search
+    text_to_search = f"{opportunity.title} {opportunity.description}".lower()
+    
+    # Recompete keywords
+    recompete_keywords = [
+        "recompete", "incumbent", "follow-on", "renewal", "bridge",
+        "sole source", "option year", "task order extension", "continuation",
+        "existing contract", "current contractor"
+    ]
+    
+    # New opportunity keywords
+    new_keywords = [
+        "new requirement", "new initiative", "greenfield", "new procurement",
+        "new acquisition", "first time", "initial award"
+    ]
+    
+    # Check for recompete signals
+    if any(keyword in text_to_search for keyword in recompete_keywords):
+        return "Likely Recompete"
+    
+    # Check for new opportunity signals
+    if any(keyword in text_to_search for keyword in new_keywords):
+        return "Likely New"
+    
+    return "Unknown"
+
+
+def get_recompete_emoji(signal: str) -> str:
+    """Get emoji for recompete signal."""
+    if signal == "Likely Recompete":
+        return "🟠"
+    elif signal == "Likely New":
+        return "🟢"
+    else:
+        return "⚪"
+
+
+def generate_why_explanation(score: OpportunityScore, is_pro: bool = False) -> Dict[str, str]:
+    """
+    Feature: Generate "Why?" explanation for an opportunity score.
+    
+    Returns:
+        Dict with 'bullets' (short summary) and 'full' (detailed explanation)
+    """
+    notice_id = score.opportunity.notice_id
+    
+    # Check cache first
+    if notice_id in st.session_state.explanations_cache:
+        cached = st.session_state.explanations_cache[notice_id]
+        if is_pro:
+            return cached
+        else:
+            # Free users get limited version
+            return {
+                "bullets": cached.get("bullets", "").split("\n")[:2],  # First 2 bullets only
+                "full": "Upgrade to Pro to see full reasoning"
+            }
+    
+    # Generate explanation
+    breakdown = score.breakdown
+    opp = score.opportunity
+    
+    # Build bullet summary
+    bullets = []
+    
+    # Domain match
+    if breakdown.domain_match >= 70:
+        bullets.append(f"✅ Domain match: {breakdown.domain_match:.0f}% - Strong alignment")
+    elif breakdown.domain_match >= 50:
+        bullets.append(f"⚠️ Domain match: {breakdown.domain_match:.0f}% - Moderate alignment")
+    else:
+        bullets.append(f"❌ Domain match: {breakdown.domain_match:.0f}% - Weak alignment")
+    
+    # NAICS match
+    if breakdown.naics_match >= 70:
+        bullets.append(f"✅ NAICS match: {breakdown.naics_match:.0f}% - Excellent code alignment")
+    elif breakdown.naics_match >= 50:
+        bullets.append(f"⚠️ NAICS match: {breakdown.naics_match:.0f}% - Partial code match")
+    else:
+        bullets.append(f"❌ NAICS match: {breakdown.naics_match:.0f}% - Limited code match")
+    
+    # Agency preference
+    if breakdown.agency_alignment >= 70:
+        bullets.append(f"✅ Agency preference: {breakdown.agency_alignment:.0f}% - Preferred agency")
+    elif breakdown.agency_alignment >= 50:
+        bullets.append(f"⚠️ Agency preference: {breakdown.agency_alignment:.0f}% - Neutral agency")
+    else:
+        bullets.append(f"❌ Agency preference: {breakdown.agency_alignment:.0f}% - Not preferred")
+    
+    # Set-aside/certification (simplified - using contract_type_fit as proxy)
+    if breakdown.contract_type_fit >= 70:
+        bullets.append(f"✅ Contract type/certification: {breakdown.contract_type_fit:.0f}% - Good fit")
+    elif breakdown.contract_type_fit >= 50:
+        bullets.append(f"⚠️ Contract type/certification: {breakdown.contract_type_fit:.0f}% - Partial fit")
+    else:
+        bullets.append(f"❌ Contract type/certification: {breakdown.contract_type_fit:.0f}% - Poor fit")
+    
+    # Complexity risk
+    complexity = opp.complexity or "Unknown"
+    if complexity in ["High", "Very High"]:
+        bullets.append(f"⚠️ Complexity risk: High - Requires significant expertise")
+    elif complexity in ["Medium", "Moderate"]:
+        bullets.append(f"ℹ️ Complexity risk: Medium - Moderate challenge")
+    else:
+        bullets.append(f"✅ Complexity risk: Low - Manageable scope")
+    
+    # Timing risk
+    if opp.due_date:
+        now = _normalize_datetime_for_comparison(opp.due_date)
+        days_remaining = (opp.due_date - now).days
+        if days_remaining <= 3:
+            bullets.append(f"🔴 Timing risk: URGENT - Only {days_remaining} days remaining")
+        elif days_remaining <= 7:
+            bullets.append(f"🟡 Timing risk: Due soon - {days_remaining} days remaining")
+        else:
+            bullets.append(f"✅ Timing risk: Adequate time - {days_remaining} days remaining")
+    else:
+        bullets.append(f"ℹ️ Timing risk: No deadline specified")
+    
+    bullets_text = "\n".join(bullets)
+    
+    # Use existing explanation/reasoning for full text
+    full_explanation = score.explanation
+    if score.reasoning:
+        full_explanation += f"\n\nDetailed Reasoning:\n{score.reasoning}"
+    
+    result = {
+        "bullets": bullets_text,
+        "full": full_explanation
+    }
+    
+    # Cache the result
+    st.session_state.explanations_cache[notice_id] = result
+    
+    # Return limited version for free users
+    if not is_pro:
+        return {
+            "bullets": "\n".join(bullets[:2]),  # First 2 bullets only
+            "full": "Upgrade to Pro to see full reasoning"
+        }
+    
+    return result
 
 
 async def fetch_and_classify_opportunities(
@@ -297,6 +501,23 @@ def main():
             if st.button("🚪 Logout", key="logout_btn"):
                 logout()
                 return
+        st.markdown("---")
+        
+        # Feature: Free/Pro plan toggle (simple demo, no real billing)
+        st.markdown("### 💳 Account Plan")
+        plan_options = ["Free", "Pro (demo)"]
+        current_plan = st.radio(
+            "Select plan",
+            options=plan_options,
+            index=0 if st.session_state.plan == "Free" else 1,
+            key="plan_selector",
+            help="Free: Limited features. Pro: Full access to all features."
+        )
+        st.session_state.plan = current_plan
+        if current_plan == "Pro (demo)":
+            st.success("✅ Pro features enabled")
+        else:
+            st.info("💡 Upgrade to Pro for full explanations, bid strategies, and detailed insights")
         st.markdown("---")
     
     st.title("🏛️ AI-Powered IT Contract Finder")
@@ -817,6 +1038,23 @@ def main():
     if st.session_state.scores:
         st.header("📊 Ranked Opportunities")
         
+        # Feature: Executive Summary Bar
+        summary = compute_executive_summary(st.session_state.scores)
+        if summary["total"] > 0:
+            col_sum1, col_sum2, col_sum3 = st.columns(3)
+            with col_sum1:
+                st.markdown(f"""
+                **Out of {summary['total']} opportunities:**
+                - 🟢 {summary['bid_count']} BID (≥80)
+                - 🟡 {summary['team_count']} TEAM (60-79)
+                - 🔴 {summary['ignore_count']} IGNORE (<60)
+                """)
+            with col_sum2:
+                st.metric("Top Due Soon", f"{summary['due_soon_count']}", help="Opportunities with ≤7 days remaining")
+            with col_sum3:
+                st.metric("Top Urgent", f"{summary['urgent_count']}", help="Opportunities with ≤3 days remaining")
+            st.markdown("---")
+        
         # Filter options
         col_filter1, col_filter2 = st.columns([3, 1])
         with col_filter1:
@@ -859,24 +1097,76 @@ def main():
         # Sort by fit score
         filtered_scores.sort(key=lambda x: x.fit_score, reverse=True)
         
-        # Create DataFrame for display
+        # Feature: Check if user is on Pro plan
+        is_pro = st.session_state.plan == "Pro (demo)"
+        
+        # Create DataFrame for display with new features
         df_data = []
         for score in filtered_scores:
             is_expired, status_msg = get_expiry_status(score.opportunity)
             due_date_str = score.opportunity.due_date.strftime("%Y-%m-%d") if score.opportunity.due_date else "N/A"
             
+            # Feature: Recompete signal detection
+            recompete_signal = detect_recompete_signal(score.opportunity)
+            recompete_display = f"{get_recompete_emoji(recompete_signal)} {recompete_signal}"
+            
+            # Feature: Free/Pro gating for Action column
+            if is_pro:
+                action_display = f"{get_color_for_action(score.recommended_action)} {score.recommended_action}"
+            else:
+                # Free users see blurred/locked action
+                action_display = f"🔒 {score.fit_score:.1f} (Pro to unlock)"
+            
+            # Feature: "Why?" button column
+            notice_id = score.opportunity.notice_id
+            why_button_key = f"why_btn_{notice_id}"
+            
             df_data.append({
                 "Fit Score": f"{get_color_for_score(score.fit_score)} {score.fit_score:.1f}",
-                "Action": f"{get_color_for_action(score.recommended_action)} {score.recommended_action}",
+                "Action": action_display,
+                "Why?": f"❓ Explain",  # Will be made clickable via selection
                 "Title": score.opportunity.title[:80] + "..." if len(score.opportunity.title) > 80 else score.opportunity.title,
                 "Agency": score.opportunity.agency,
                 "Domain": score.opportunity.primary_domain or "N/A",
+                "Recompete Signal": recompete_display,  # Feature: New column
                 "Complexity": score.opportunity.complexity or "N/A",
                 "Due Date": f"{due_date_str} {status_msg}" if score.opportunity.due_date else "N/A",
                 "Notice ID": score.opportunity.notice_id
             })
         
         df = pd.DataFrame(df_data)
+        
+        # Feature: "Why?" explanation selection
+        if len(filtered_scores) > 0:
+            # Create a selectbox to choose which opportunity to explain
+            why_options = ["-- Select to see explanation --"] + [
+                f"{s.opportunity.title[:60]}... (Score: {s.fit_score:.1f})" 
+                for s in filtered_scores
+            ]
+            selected_why_idx = st.selectbox(
+                "💡 Click 'Why?' in table or select below to see explanation:",
+                options=range(len(why_options)),
+                format_func=lambda i: why_options[i],
+                key="why_explanation_selector"
+            )
+            
+            # If user selected an opportunity (not the default)
+            if selected_why_idx > 0:
+                selected_score = filtered_scores[selected_why_idx - 1]
+                st.session_state.selected_notice_id = selected_score.opportunity.notice_id
+                
+                # Generate and display explanation
+                explanation = generate_why_explanation(selected_score, is_pro=is_pro)
+                
+                with st.expander(f"📊 Why {selected_score.recommended_action}? - {selected_score.opportunity.title[:60]}...", expanded=True):
+                    st.markdown("### Quick Summary")
+                    st.markdown(explanation["bullets"])
+                    
+                    if is_pro:
+                        st.markdown("### Full Explanation")
+                        st.markdown(explanation["full"])
+                    else:
+                        st.info("💡 **Upgrade to Pro** to see full reasoning, detailed breakdown, and AI insights")
         
         # Display table
         st.dataframe(
@@ -887,6 +1177,8 @@ def main():
                 "Title": st.column_config.TextColumn("Title", width="large"),
                 "Fit Score": st.column_config.TextColumn("Fit Score", width="small"),
                 "Action": st.column_config.TextColumn("Action", width="small"),
+                "Why?": st.column_config.TextColumn("Why?", width="small"),
+                "Recompete Signal": st.column_config.TextColumn("Recompete Signal", width="medium"),
             }
         )
         
@@ -954,127 +1246,145 @@ def main():
             if score.recommended_action == RecommendedAction.BID:
                 st.markdown("---")
                 st.header("🎯 AI Bid Assistant")
-                st.info("💡 Use AI to generate bid strategy, proposal content, and win themes for this opportunity.")
+                
+                # Feature: Free/Pro gating for Bid Strategy
+                is_pro_detail = st.session_state.plan == "Pro (demo)"
+                if not is_pro_detail:
+                    st.warning("🔒 **Pro Feature:** Upgrade to Pro to access AI Bid Assistant, bid strategies, and proposal generation.")
+                    st.info("💡 Switch to 'Pro (demo)' in the sidebar to unlock this feature.")
+                else:
+                    st.info("💡 Use AI to generate bid strategy, proposal content, and win themes for this opportunity.")
                 
                 bid_tabs = st.tabs(["📋 Bid Strategy", "✍️ Proposal Sections", "📊 Quick Analysis", "💬 Ask Questions"])
                 
                 with bid_tabs[0]:
-                    if st.button("🚀 Generate Bid Strategy", type="primary", key="generate_strategy"):
-                        with st.spinner("Generating comprehensive bid strategy with AI..."):
-                            strategy = bid_assistant.generate_bid_strategy(opp, st.session_state.profile, score)
+                    # Feature: Disable button for Free users
+                    if is_pro_detail:
+                        if st.button("🚀 Generate Bid Strategy", type="primary", key="generate_strategy"):
+                            with st.spinner("Generating comprehensive bid strategy with AI..."):
+                                strategy = bid_assistant.generate_bid_strategy(opp, st.session_state.profile, score)
+                                
+                                st.session_state[f"bid_strategy_{opp.notice_id}"] = strategy
+                        
+                        if f"bid_strategy_{opp.notice_id}" in st.session_state:
+                            strategy = st.session_state[f"bid_strategy_{opp.notice_id}"]
                             
-                            st.session_state[f"bid_strategy_{opp.notice_id}"] = strategy
-                    
-                    if f"bid_strategy_{opp.notice_id}" in st.session_state:
-                        strategy = st.session_state[f"bid_strategy_{opp.notice_id}"]
-                        
-                        st.subheader("🎯 Win Themes")
-                        st.markdown(strategy.get("win_themes", "Not generated"))
-                        
-                        st.subheader("📑 Proposal Outline")
-                        st.markdown(strategy.get("proposal_outline", "Not generated"))
-                        
-                        st.subheader("💬 Key Talking Points")
-                        st.markdown(strategy.get("key_talking_points", "Not generated"))
-                        
-                        st.subheader("🏆 Competitive Positioning")
-                        st.markdown(strategy.get("competitive_positioning", "Not generated"))
-                        
-                        st.subheader("⚠️ Risk Mitigation")
-                        st.markdown(strategy.get("risk_mitigation", "Not generated"))
-                        
-                        st.subheader("📝 Executive Summary Draft")
-                        st.text_area(
-                            "Executive Summary",
-                            value=strategy.get("executive_summary_draft", ""),
-                            height=200,
-                            key=f"exec_summary_{opp.notice_id}",
-                            help="Edit and customize the AI-generated executive summary"
-                        )
+                            st.subheader("🎯 Win Themes")
+                            st.markdown(strategy.get("win_themes", "Not generated"))
+                            
+                            st.subheader("📑 Proposal Outline")
+                            st.markdown(strategy.get("proposal_outline", "Not generated"))
+                            
+                            st.subheader("💬 Key Talking Points")
+                            st.markdown(strategy.get("key_talking_points", "Not generated"))
+                            
+                            st.subheader("🏆 Competitive Positioning")
+                            st.markdown(strategy.get("competitive_positioning", "Not generated"))
+                            
+                            st.subheader("⚠️ Risk Mitigation")
+                            st.markdown(strategy.get("risk_mitigation", "Not generated"))
+                            
+                            st.subheader("📝 Executive Summary Draft")
+                            st.text_area(
+                                "Executive Summary",
+                                value=strategy.get("executive_summary_draft", ""),
+                                height=200,
+                                key=f"exec_summary_{opp.notice_id}",
+                                help="Edit and customize the AI-generated executive summary"
+                            )
+                    else:
+                        st.info("💡 Generate a bid strategy to see detailed recommendations.")
                 
                 with bid_tabs[1]:
-                    st.subheader("Generate Proposal Sections")
-                    section_type = st.selectbox(
-                        "Select Section Type",
-                        options=[
-                            "Technical Approach",
-                            "Management Plan",
-                            "Past Performance",
-                            "Key Personnel",
-                            "Quality Assurance Plan",
-                            "Risk Management Plan",
-                            "Transition Plan"
-                        ],
-                        key=f"section_type_{opp.notice_id}"
-                    )
-                    
-                    section_requirements = st.text_area(
-                        "Section Requirements (Optional)",
-                        placeholder="Enter any specific requirements or guidance for this section...",
-                        key=f"section_req_{opp.notice_id}",
-                        height=100
-                    )
-                    
-                    if st.button("✨ Generate Section", key=f"gen_section_{opp.notice_id}"):
-                        with st.spinner(f"Generating {section_type} section with AI..."):
-                            section_content = bid_assistant.generate_proposal_section(
-                                opp,
-                                st.session_state.profile,
-                                section_type,
-                                section_requirements if section_requirements.strip() else None
-                            )
-                            
-                            st.text_area(
-                                f"{section_type}",
-                                value=section_content,
-                                height=400,
-                                key=f"section_content_{opp.notice_id}",
-                                help="Edit and customize the AI-generated section"
-                            )
+                    if is_pro_detail:
+                        st.subheader("Generate Proposal Sections")
+                        section_type = st.selectbox(
+                            "Select Section Type",
+                            options=[
+                                "Technical Approach",
+                                "Management Plan",
+                                "Past Performance",
+                                "Key Personnel",
+                                "Quality Assurance Plan",
+                                "Risk Management Plan",
+                                "Transition Plan"
+                            ],
+                            key=f"section_type_{opp.notice_id}"
+                        )
+                        
+                        section_requirements = st.text_area(
+                            "Section Requirements (Optional)",
+                            placeholder="Enter any specific requirements or guidance for this section...",
+                            key=f"section_req_{opp.notice_id}",
+                            height=100
+                        )
+                        
+                        if st.button("✨ Generate Section", key=f"gen_section_{opp.notice_id}"):
+                            with st.spinner(f"Generating {section_type} section with AI..."):
+                                section_content = bid_assistant.generate_proposal_section(
+                                    opp,
+                                    st.session_state.profile,
+                                    section_type,
+                                    section_requirements if section_requirements.strip() else None
+                                )
+                                
+                                st.text_area(
+                                    f"{section_type}",
+                                    value=section_content,
+                                    height=400,
+                                    key=f"section_content_{opp.notice_id}",
+                                    help="Edit and customize the AI-generated section"
+                                )
+                    else:
+                        st.info("💡 Upgrade to Pro to generate proposal sections.")
                 
                 with bid_tabs[2]:
-                    st.subheader("Quick Bid Analysis")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.metric("Fit Score", f"{score.fit_score:.1f}/100")
-                        st.metric("Domain Match", f"{score.breakdown.domain_match:.1f}%")
-                        st.metric("NAICS Match", f"{score.breakdown.naics_match:.1f}%")
-                    
-                    with col2:
-                        st.metric("Technical Skills Match", f"{score.breakdown.technical_skill_match:.1f}%")
-                        st.metric("Agency Alignment", f"{score.breakdown.agency_alignment:.1f}%")
-                        st.metric("Strategic Value", f"{score.breakdown.strategic_value:.1f}%")
-                    
-                    if score.risk_factors:
-                        st.subheader("⚠️ Risk Factors")
-                        for risk in score.risk_factors:
-                            st.warning(f"• {risk}")
-                    
-                    st.subheader("✅ Strengths")
-                    strengths = []
-                    if score.breakdown.domain_match >= 70:
-                        strengths.append("Strong domain alignment")
-                    if score.breakdown.naics_match >= 70:
-                        strengths.append("Excellent NAICS code match")
-                    if score.breakdown.technical_skill_match >= 70:
-                        strengths.append("Strong technical capabilities match")
-                    if score.breakdown.agency_alignment >= 70:
-                        strengths.append("Good agency relationship potential")
-                    
-                    if strengths:
-                        for strength in strengths:
-                            st.success(f"✓ {strength}")
+                    if is_pro_detail:
+                        st.subheader("Quick Bid Analysis")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.metric("Fit Score", f"{score.fit_score:.1f}/100")
+                            st.metric("Domain Match", f"{score.breakdown.domain_match:.1f}%")
+                            st.metric("NAICS Match", f"{score.breakdown.naics_match:.1f}%")
+                        
+                        with col2:
+                            st.metric("Technical Skills Match", f"{score.breakdown.technical_skill_match:.1f}%")
+                            st.metric("Agency Alignment", f"{score.breakdown.agency_alignment:.1f}%")
+                            st.metric("Strategic Value", f"{score.breakdown.strategic_value:.1f}%")
+                        
+                        if score.risk_factors:
+                            st.subheader("⚠️ Risk Factors")
+                            for risk in score.risk_factors:
+                                st.warning(f"• {risk}")
+                        
+                        st.subheader("✅ Strengths")
+                        strengths = []
+                        if score.breakdown.domain_match >= 70:
+                            strengths.append("Strong domain alignment")
+                        if score.breakdown.naics_match >= 70:
+                            strengths.append("Excellent NAICS code match")
+                        if score.breakdown.technical_skill_match >= 70:
+                            strengths.append("Strong technical capabilities match")
+                        if score.breakdown.agency_alignment >= 70:
+                            strengths.append("Good agency relationship potential")
+                        
+                        if strengths:
+                            for strength in strengths:
+                                st.success(f"✓ {strength}")
+                        else:
+                            st.info("Review individual match scores to identify strengths")
                     else:
-                        st.info("Review individual match scores to identify strengths")
+                        st.info("💡 Upgrade to Pro to see detailed bid analysis.")
                 
                 with bid_tabs[3]:
-                    st.subheader("💬 Ask Questions About This Opportunity")
-                    st.info("💡 Ask any questions about this opportunity. Upload PDF attachments (e.g., submission instructions, requirements) to get answers based on the documents.")
-                    
-                    # PDF Upload Section
-                    st.markdown("### 📎 Upload Opportunity Documents (PDFs)")
-                    uploaded_files = st.file_uploader(
+                    if is_pro_detail:
+                        st.subheader("💬 Ask Questions About This Opportunity")
+                        st.info("💡 Ask any questions about this opportunity. Upload PDF attachments (e.g., submission instructions, requirements) to get answers based on the documents.")
+                        
+                        # PDF Upload Section
+                        st.markdown("### 📎 Upload Opportunity Documents (PDFs)")
+                        uploaded_files = st.file_uploader(
                         "Upload PDF documents (e.g., Submission Instructions, Requirements, Security Requirements)",
                         type=['pdf'],
                         accept_multiple_files=True,
@@ -1209,11 +1519,13 @@ def main():
                             # Clear input by rerunning
                             st.rerun()
                     
-                    # Clear chat history button
-                    if st.session_state[chat_key]:
-                        if st.button("🗑️ Clear Conversation", key=f"clear_chat_{opp.notice_id}"):
-                            st.session_state[chat_key] = []
-                            st.rerun()
+                        # Clear chat history button
+                        if st.session_state[chat_key]:
+                            if st.button("🗑️ Clear Conversation", key=f"clear_chat_{opp.notice_id}"):
+                                st.session_state[chat_key] = []
+                                st.rerun()
+                    else:
+                        st.info("💡 Upgrade to Pro to ask questions and upload PDFs for AI-powered Q&A.")
             
             # AI Reasoning Panel
             with st.expander("🤖 AI Reasoning & Explanation", expanded=True):
@@ -1251,12 +1563,16 @@ def main():
         if st.button("📥 Export to CSV"):
             csv_data = []
             for score in filtered_scores:
+                # Feature: Include recompete signal in export
+                recompete_signal = detect_recompete_signal(score.opportunity)
+                
                 csv_data.append({
                     "Notice ID": score.opportunity.notice_id,
                     "Title": score.opportunity.title,
                     "Agency": score.opportunity.agency,
                     "Fit Score": score.fit_score,
                     "Recommended Action": score.recommended_action,
+                    "Recompete Signal": recompete_signal,  # Feature: New column
                     "Domain Match": score.breakdown.domain_match,
                     "NAICS Match": score.breakdown.naics_match,
                     "Technical Skill Match": score.breakdown.technical_skill_match,
@@ -1310,3 +1626,4 @@ if __name__ == "__main__":
         3. Check the logs for more details
         4. Try refreshing the page
         """)
+

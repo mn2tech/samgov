@@ -311,9 +311,14 @@ def show_login_page():
                 if is_streamlit_cloud:
                     st.info("💡 **Note:** Sign-in will open in a new tab. After signing in with Google, you'll be redirected back to the app automatically.")
                 
+                # Use Streamlit link button instead of external image to avoid ERR_BLOCKED_BY_CLIENT
+                # (browser extensions often block external images from Google CDN)
+                # Create a clickable link styled as a button
                 st.markdown(f"""
-                <a href="{login_url}" target="{target}" rel="noopener noreferrer">
-                    <img src="https://developers.google.com/identity/images/btn_google_signin_dark_normal_web.png" alt="Sign in with Google">
+                <a href="{login_url}" target="{target}" rel="noopener noreferrer" style="text-decoration: none;">
+                    <div style="background-color: #4285F4; color: white; padding: 12px 24px; border-radius: 4px; text-align: center; font-weight: bold; cursor: pointer;">
+                        🔐 Sign in with Google
+                    </div>
                 </a>
                 """, unsafe_allow_html=True)
             
