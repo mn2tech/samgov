@@ -256,17 +256,21 @@ def show_login_page():
                         'tenant_name': tenant.name
                     }
                     
-                    # Clear query params if possible
+                    # Security: Clear OAuth callback code from URL to prevent accidental sharing
+                    # The authorization code has been exchanged for tokens and stored in session state
+                    # We must remove it from the URL immediately after use
                     try:
-                        if hasattr(st, 'query_params') and hasattr(st.query_params, 'clear'):
+                        # Try new Streamlit API (1.28.0+) - clear all query params
+                        if hasattr(st, 'query_params'):
                             st.query_params.clear()
-                    except:
-                        pass  # Ignore if clearing doesn't work
+                        # Fallback to experimental API - set empty dict to clear all params
+                        elif hasattr(st, 'experimental_set_query_params'):
+                            st.experimental_set_query_params()
+                    except Exception as e:
+                        logger.warning(f"Could not clear query params: {e}")
                     
                     st.success(f"✅ Successfully logged in as {user_info['email']}")
-                    # Small delay to show success message
-                    import time
-                    time.sleep(1)
+                    # Force rerun to refresh page with clean URL (no ?code=...)
                     st.rerun()
                 else:
                     st.error("❌ Authentication failed. Please try again.")
@@ -363,3 +367,4 @@ def logout():
     if 'opportunities' in st.session_state:
         st.session_state.opportunities = []
     st.rerun()
+
