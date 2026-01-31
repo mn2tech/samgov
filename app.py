@@ -1125,10 +1125,10 @@ def main():
                 "Fit Score": f"{get_color_for_score(score.fit_score)} {score.fit_score:.1f}",
                 "Action": action_display,
                 "Why?": f"❓ Explain",  # Will be made clickable via selection
+                "Recompete": recompete_display,  # Feature: New column (shortened name for better visibility)
                 "Title": score.opportunity.title[:80] + "..." if len(score.opportunity.title) > 80 else score.opportunity.title,
                 "Agency": score.opportunity.agency,
                 "Domain": score.opportunity.primary_domain or "N/A",
-                "Recompete Signal": recompete_display,  # Feature: New column
                 "Complexity": score.opportunity.complexity or "N/A",
                 "Due Date": f"{due_date_str} {status_msg}" if score.opportunity.due_date else "N/A",
                 "Notice ID": score.opportunity.notice_id
@@ -1178,7 +1178,7 @@ def main():
                 "Fit Score": st.column_config.TextColumn("Fit Score", width="small"),
                 "Action": st.column_config.TextColumn("Action", width="small"),
                 "Why?": st.column_config.TextColumn("Why?", width="small"),
-                "Recompete Signal": st.column_config.TextColumn("Recompete Signal", width="medium"),
+                "Recompete": st.column_config.TextColumn("Recompete", width="medium"),
             }
         )
         
@@ -1572,7 +1572,7 @@ def main():
                     "Agency": score.opportunity.agency,
                     "Fit Score": score.fit_score,
                     "Recommended Action": score.recommended_action,
-                    "Recompete Signal": recompete_signal,  # Feature: New column
+                    "Recompete": recompete_signal,  # Feature: New column
                     "Domain Match": score.breakdown.domain_match,
                     "NAICS Match": score.breakdown.naics_match,
                     "Technical Skill Match": score.breakdown.technical_skill_match,
