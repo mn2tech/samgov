@@ -1139,23 +1139,56 @@ def main():
         
         # Feature: "Why?" explanation selection
         if len(filtered_scores) > 0:
-            # Create a selectbox to choose which opportunity to explain
-            why_options = ["-- Select to see explanation --"] + [
+            # Create clickable buttons for each opportunity to explain
+            st.markdown("### 💡 Why This Recommendation?")
+            st.markdown("Click a button below to see why each opportunity received its score and action recommendation.")
+            
+            # Create buttons in a grid layout (3 columns)
+            cols_per_row = 3
+            for i, score in enumerate(filtered_scores):
+                if i % cols_per_row == 0:
+                    button_cols = st.columns(cols_per_row)
+                
+                col_idx = i % cols_per_row
+                with button_cols[col_idx]:
+                    opp_title_short = score.opportunity.title[:40] + "..." if len(score.opportunity.title) > 40 else score.opportunity.title
+                    if st.button(
+                        f"❓ {opp_title_short}",
+                        key=f"why_btn_{score.opportunity.notice_id}",
+                        use_container_width=True,
+                        help=f"Score: {score.fit_score:.1f} | Action: {score.recommended_action}"
+                    ):
+                        st.session_state.selected_notice_id = score.opportunity.notice_id
+                        st.session_state[f"show_explanation_{score.opportunity.notice_id}"] = True
+            
+            # Also provide dropdown as alternative
+            why_options = ["-- Or select from dropdown --"] + [
                 f"{s.opportunity.title[:60]}... (Score: {s.fit_score:.1f})" 
                 for s in filtered_scores
             ]
             selected_why_idx = st.selectbox(
-                "💡 Click 'Why?' in table or select below to see explanation:",
+                "Or use dropdown:",
                 options=range(len(why_options)),
                 format_func=lambda i: why_options[i],
                 key="why_explanation_selector"
             )
             
-            # If user selected an opportunity (not the default)
+            # Determine which opportunity to show explanation for
+            selected_score = None
             if selected_why_idx > 0:
                 selected_score = filtered_scores[selected_why_idx - 1]
                 st.session_state.selected_notice_id = selected_score.opportunity.notice_id
-                
+            
+            # Check if a button was clicked
+            if "selected_notice_id" in st.session_state and st.session_state.selected_notice_id:
+                # Find the score for the selected notice ID
+                for score in filtered_scores:
+                    if score.opportunity.notice_id == st.session_state.selected_notice_id:
+                        selected_score = score
+                        break
+            
+            # Display explanation if an opportunity is selected
+            if selected_score:
                 # Generate and display explanation
                 explanation = generate_why_explanation(selected_score, is_pro=is_pro)
                 
