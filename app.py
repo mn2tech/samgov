@@ -1036,11 +1036,10 @@ def main():
     
     # Display opportunities
     if st.session_state.scores:
-        st.header("📊 Ranked Opportunities")
-        
-        # Feature: Executive Summary Bar
+        # Feature: Executive Summary Bar - Show prominently at top
         summary = compute_executive_summary(st.session_state.scores)
         if summary["total"] > 0:
+            st.markdown("### 📊 Executive Summary")
             col_sum1, col_sum2, col_sum3 = st.columns(3)
             with col_sum1:
                 st.markdown(f"""
@@ -1054,6 +1053,8 @@ def main():
             with col_sum3:
                 st.metric("Top Urgent", f"{summary['urgent_count']}", help="Opportunities with ≤3 days remaining")
             st.markdown("---")
+        
+        st.header("📊 Ranked Opportunities")
         
         # Filter options
         col_filter1, col_filter2 = st.columns([3, 1])
