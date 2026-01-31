@@ -1384,140 +1384,140 @@ def main():
                         # PDF Upload Section
                         st.markdown("### 📎 Upload Opportunity Documents (PDFs)")
                         uploaded_files = st.file_uploader(
-                        "Upload PDF documents (e.g., Submission Instructions, Requirements, Security Requirements)",
-                        type=['pdf'],
-                        accept_multiple_files=True,
-                        key=f"pdf_upload_{opp.notice_id}",
-                        help="Upload PDF attachments from the opportunity to get AI-powered summaries and Q&A"
-                    )
-                    
-                    # Store PDF texts in session state
-                    pdf_key = f"pdf_texts_{opp.notice_id}"
-                    if pdf_key not in st.session_state:
-                        st.session_state[pdf_key] = {}
-                    
-                    # Process uploaded PDFs
-                    if uploaded_files:
-                        for uploaded_file in uploaded_files:
-                            if uploaded_file.name not in st.session_state[pdf_key]:
-                                with st.spinner(f"Processing {uploaded_file.name}..."):
-                                    # Extract text from PDF
-                                    pdf_bytes = uploaded_file.read()
-                                    pdf_text = bid_assistant.extract_text_from_pdf(io.BytesIO(pdf_bytes))
+                            "Upload PDF documents (e.g., Submission Instructions, Requirements, Security Requirements)",
+                            type=['pdf'],
+                            accept_multiple_files=True,
+                            key=f"pdf_upload_{opp.notice_id}",
+                            help="Upload PDF attachments from the opportunity to get AI-powered summaries and Q&A"
+                        )
+                        
+                        # Store PDF texts in session state
+                        pdf_key = f"pdf_texts_{opp.notice_id}"
+                        if pdf_key not in st.session_state:
+                            st.session_state[pdf_key] = {}
+                        
+                        # Process uploaded PDFs
+                        if uploaded_files:
+                            for uploaded_file in uploaded_files:
+                                if uploaded_file.name not in st.session_state[pdf_key]:
+                                    with st.spinner(f"Processing {uploaded_file.name}..."):
+                                        # Extract text from PDF
+                                        pdf_bytes = uploaded_file.read()
+                                        pdf_text = bid_assistant.extract_text_from_pdf(io.BytesIO(pdf_bytes))
+                                        
+                                        # Store in session state
+                                        st.session_state[pdf_key][uploaded_file.name] = {
+                                            "text": pdf_text,
+                                            "summary": None
+                                        }
+                                        
+                                        st.success(f"✅ Processed {uploaded_file.name}")
+                        
+                        # Display uploaded PDFs and summaries
+                        if st.session_state[pdf_key]:
+                            st.markdown("### 📄 Uploaded Documents")
+                            for filename, pdf_data in st.session_state[pdf_key].items():
+                                with st.expander(f"📎 {filename}", expanded=False):
+                                    col1, col2 = st.columns([3, 1])
                                     
-                                    # Store in session state
-                                    st.session_state[pdf_key][uploaded_file.name] = {
-                                        "text": pdf_text,
-                                        "summary": None
-                                    }
+                                    with col1:
+                                        st.markdown(f"**File:** {filename}")
+                                        if pdf_data["summary"]:
+                                            st.markdown("**Summary:**")
+                                            st.markdown(pdf_data["summary"])
+                                        else:
+                                            if st.button(f"📝 Generate Summary", key=f"summarize_{filename}_{opp.notice_id}"):
+                                                with st.spinner("Generating summary with AI..."):
+                                                    summary = bid_assistant.summarize_pdf(
+                                                        pdf_data["text"],
+                                                        opp,
+                                                        st.session_state.profile
+                                                    )
+                                                    st.session_state[pdf_key][filename]["summary"] = summary
+                                                    st.rerun()
                                     
-                                    st.success(f"✅ Processed {uploaded_file.name}")
-                    
-                    # Display uploaded PDFs and summaries
-                    if st.session_state[pdf_key]:
-                        st.markdown("### 📄 Uploaded Documents")
-                        for filename, pdf_data in st.session_state[pdf_key].items():
-                            with st.expander(f"📎 {filename}", expanded=False):
-                                col1, col2 = st.columns([3, 1])
+                                    with col2:
+                                        if st.button("🗑️ Remove", key=f"remove_{filename}_{opp.notice_id}"):
+                                            del st.session_state[pdf_key][filename]
+                                            st.rerun()
+                        
+                        # Initialize chat history in session state
+                        chat_key = f"bid_chat_{opp.notice_id}"
+                        if chat_key not in st.session_state:
+                            st.session_state[chat_key] = []
+                        
+                        # Display chat history
+                        if st.session_state[chat_key]:
+                            st.markdown("### Conversation History")
+                            for i, (q, a) in enumerate(st.session_state[chat_key]):
+                                with st.expander(f"Q{i+1}: {q[:60]}...", expanded=False):
+                                    st.markdown(f"**Question:** {q}")
+                                    st.markdown(f"**Answer:** {a}")
+                        
+                        # Question input
+                        question = st.text_input(
+                            "Ask a question about this opportunity",
+                            placeholder="e.g., What is the contract amount? How do I submit the bid? What are the submission requirements?",
+                            key=f"question_input_{opp.notice_id}"
+                        )
+                        
+                        col1, col2 = st.columns([1, 4])
+                        with col1:
+                            ask_button = st.button("❓ Ask", type="primary", key=f"ask_button_{opp.notice_id}")
+                        
+                        # Suggested questions
+                        with col2:
+                            st.markdown("**Suggested questions:**")
+                            suggested_questions = [
+                                "What is the contract amount?",
+                                "How do I submit the bid?",
+                                "What are the submission requirements?",
+                                "What is the deadline?",
+                                "What are the key requirements?",
+                                "What certifications are needed?",
+                                "What is the place of performance?",
+                                "What is the contract type?"
+                            ]
+                            for sq in suggested_questions[:4]:  # Show first 4
+                                if st.button(sq, key=f"suggested_{sq[:20]}_{opp.notice_id}"):
+                                    question = sq
+                                    ask_button = True
+                        
+                        # Process question
+                        if ask_button and question.strip():
+                            with st.spinner("🤔 Thinking..."):
+                                # Get PDF texts if available
+                                pdf_texts = []
+                                if pdf_key in st.session_state and st.session_state[pdf_key]:
+                                    pdf_texts = [data["text"] for data in st.session_state[pdf_key].values()]
                                 
-                                with col1:
-                                    st.markdown(f"**File:** {filename}")
-                                    if pdf_data["summary"]:
-                                        st.markdown("**Summary:**")
-                                        st.markdown(pdf_data["summary"])
-                                    else:
-                                        if st.button(f"📝 Generate Summary", key=f"summarize_{filename}_{opp.notice_id}"):
-                                            with st.spinner("Generating summary with AI..."):
-                                                summary = bid_assistant.summarize_pdf(
-                                                    pdf_data["text"],
-                                                    opp,
-                                                    st.session_state.profile
-                                                )
-                                                st.session_state[pdf_key][filename]["summary"] = summary
-                                                st.rerun()
+                                # Answer with PDF context if available
+                                if pdf_texts:
+                                    answer = bid_assistant.answer_question_with_pdfs(
+                                        question,
+                                        opp,
+                                        st.session_state.profile,
+                                        pdf_texts,
+                                        score
+                                    )
+                                else:
+                                    answer = bid_assistant.answer_question(
+                                        question,
+                                        opp,
+                                        st.session_state.profile,
+                                        score
+                                    )
                                 
-                                with col2:
-                                    if st.button("🗑️ Remove", key=f"remove_{filename}_{opp.notice_id}"):
-                                        del st.session_state[pdf_key][filename]
-                                        st.rerun()
-                    
-                    # Initialize chat history in session state
-                    chat_key = f"bid_chat_{opp.notice_id}"
-                    if chat_key not in st.session_state:
-                        st.session_state[chat_key] = []
-                    
-                    # Display chat history
-                    if st.session_state[chat_key]:
-                        st.markdown("### Conversation History")
-                        for i, (q, a) in enumerate(st.session_state[chat_key]):
-                            with st.expander(f"Q{i+1}: {q[:60]}...", expanded=False):
-                                st.markdown(f"**Question:** {q}")
-                                st.markdown(f"**Answer:** {a}")
-                    
-                    # Question input
-                    question = st.text_input(
-                        "Ask a question about this opportunity",
-                        placeholder="e.g., What is the contract amount? How do I submit the bid? What are the submission requirements?",
-                        key=f"question_input_{opp.notice_id}"
-                    )
-                    
-                    col1, col2 = st.columns([1, 4])
-                    with col1:
-                        ask_button = st.button("❓ Ask", type="primary", key=f"ask_button_{opp.notice_id}")
-                    
-                    # Suggested questions
-                    with col2:
-                        st.markdown("**Suggested questions:**")
-                        suggested_questions = [
-                            "What is the contract amount?",
-                            "How do I submit the bid?",
-                            "What are the submission requirements?",
-                            "What is the deadline?",
-                            "What are the key requirements?",
-                            "What certifications are needed?",
-                            "What is the place of performance?",
-                            "What is the contract type?"
-                        ]
-                        for sq in suggested_questions[:4]:  # Show first 4
-                            if st.button(sq, key=f"suggested_{sq[:20]}_{opp.notice_id}"):
-                                question = sq
-                                ask_button = True
-                    
-                    # Process question
-                    if ask_button and question.strip():
-                        with st.spinner("🤔 Thinking..."):
-                            # Get PDF texts if available
-                            pdf_texts = []
-                            if pdf_key in st.session_state and st.session_state[pdf_key]:
-                                pdf_texts = [data["text"] for data in st.session_state[pdf_key].values()]
-                            
-                            # Answer with PDF context if available
-                            if pdf_texts:
-                                answer = bid_assistant.answer_question_with_pdfs(
-                                    question,
-                                    opp,
-                                    st.session_state.profile,
-                                    pdf_texts,
-                                    score
-                                )
-                            else:
-                                answer = bid_assistant.answer_question(
-                                    question,
-                                    opp,
-                                    st.session_state.profile,
-                                    score
-                                )
-                            
-                            # Add to chat history
-                            st.session_state[chat_key].append((question, answer))
-                            
-                            # Display answer
-                            st.markdown("### Answer")
-                            st.success(answer)
-                            
-                            # Clear input by rerunning
-                            st.rerun()
-                    
+                                # Add to chat history
+                                st.session_state[chat_key].append((question, answer))
+                                
+                                # Display answer
+                                st.markdown("### Answer")
+                                st.success(answer)
+                                
+                                # Clear input by rerunning
+                                st.rerun()
+                        
                         # Clear chat history button
                         if st.session_state[chat_key]:
                             if st.button("🗑️ Clear Conversation", key=f"clear_chat_{opp.notice_id}"):
