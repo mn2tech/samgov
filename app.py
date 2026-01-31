@@ -1125,7 +1125,6 @@ def main():
             df_data.append({
                 "Fit Score": f"{get_color_for_score(score.fit_score)} {score.fit_score:.1f}",
                 "Action": action_display,
-                "Why?": f"❓ Explain",  # Will be made clickable via selection
                 "Recompete": recompete_display,  # Feature: New column (shortened name for better visibility)
                 "Title": score.opportunity.title[:80] + "..." if len(score.opportunity.title) > 80 else score.opportunity.title,
                 "Agency": score.opportunity.agency,
@@ -1178,7 +1177,6 @@ def main():
                 "Title": st.column_config.TextColumn("Title", width="large"),
                 "Fit Score": st.column_config.TextColumn("Fit Score", width="small"),
                 "Action": st.column_config.TextColumn("Action", width="small"),
-                "Why?": st.column_config.TextColumn("Why?", width="small"),
                 "Recompete": st.column_config.TextColumn("Recompete", width="medium"),
             }
         )
