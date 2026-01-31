@@ -208,25 +208,51 @@ def detect_recompete_signal(opportunity: Opportunity) -> str:
     # Combine title and description for keyword search
     text_to_search = f"{opportunity.title} {opportunity.description}".lower()
     
-    # Recompete keywords
+    # Recompete keywords (explicit)
     recompete_keywords = [
-        "recompete", "incumbent", "follow-on", "renewal", "bridge",
+        "recompete", "incumbent", "follow-on", "follow on", "renewal", "bridge",
         "sole source", "option year", "task order extension", "continuation",
-        "existing contract", "current contractor"
+        "existing contract", "current contractor", "current award", "existing award",
+        "re-award", "recompete", "re-compete", "extend", "extension"
     ]
     
-    # New opportunity keywords
+    # Recompete indicators (implicit signals)
+    recompete_indicators = [
+        "set aside", "set-aside",  # Often indicates recompete of set-aside contracts
+        "idiq", "indefinite delivery",  # IDIQ contracts are often recompetes
+        "task order", "delivery order",  # Task orders are typically recompetes
+        "bpa", "blanket purchase",  # BPAs are often recompetes
+        "seaport",  # SEAPORT is a known recompete vehicle
+    ]
+    
+    # New opportunity keywords (explicit)
     new_keywords = [
         "new requirement", "new initiative", "greenfield", "new procurement",
-        "new acquisition", "first time", "initial award"
+        "new acquisition", "first time", "initial award", "new contract",
+        "sources sought", "market research", "capability statement"
     ]
     
-    # Check for recompete signals
+    # New opportunity indicators (implicit signals)
+    new_indicators = [
+        "rfi", "request for information",  # RFIs are typically new opportunities
+        "sources sought notice", "sources sought",  # Indicates new opportunity
+        "market survey", "industry day",  # New opportunity signals
+    ]
+    
+    # Check for explicit recompete signals first
     if any(keyword in text_to_search for keyword in recompete_keywords):
         return "Likely Recompete"
     
-    # Check for new opportunity signals
+    # Check for implicit recompete indicators
+    if any(indicator in text_to_search for indicator in recompete_indicators):
+        return "Likely Recompete"
+    
+    # Check for explicit new opportunity signals
     if any(keyword in text_to_search for keyword in new_keywords):
+        return "Likely New"
+    
+    # Check for implicit new opportunity indicators
+    if any(indicator in text_to_search for indicator in new_indicators):
         return "Likely New"
     
     return "Unknown"
